@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "note": "Curated agronomy knowledge base. Values are typical pan-India ranges from ICAR / state agri-university references and MUST be reviewed by an agronomist before production use. Spacing in cm; rainfall in mm; temperature in C; fertilizer NPK in kg/ha.",
+  "layers": {
+    "underground": {"order": 0, "label": "Underground (roots/tubers)", "height_m": [0, 0.1]},
+    "ground": {"order": 1, "label": "Ground (0-1 ft leafy)", "height_m": [0, 0.3]},
+    "middle": {"order": 2, "label": "Middle (1-3 ft bushy)", "height_m": [0.3, 1.0]},
+    "vine": {"order": 3, "label": "Climbers/vines (trellis)", "height_m": [1.0, 3.0]},
+    "top": {"order": 4, "label": "Top/canopy (tall)", "height_m": [3.0, 15.0]}
+  },
+  "crops": [
+    {
+      "id": "turmeric", "name": "Turmeric", "common_names": ["Haldi"], "category": "spice",
+      "layer": "underground", "height_m": 0.9,
+      "seasons": ["Kharif (monsoon)"],
+      "ph": [4.5, 7.5], "textures": ["Loam / Silt loam", "Sandy loam", "Clay loam"],
+      "rainfall_mm": [1000, 2000], "temp_c": [20, 35],
+      "spacing_cm": {"row": 30, "plant": 25}, "seed_rate_kg_per_ha": 2500,
+      "duration_days": 240,
+      "fertilizer_npk_kg_ha": {"N": 60, "P": 50, "K": 120},
+      "companions": ["banana", "chilli"], "antagonists": [],
+      "notes": "Shade-tolerant; excellent understory crop beneath banana/papaya in multilayer systems."
+    },
+    {
+      "id": "ginger", "name": "Ginger", "common_names": ["Adrak"], "category": "spice",
+      "layer": "underground", "height_m": 0.9,
+      "seasons": ["Kharif (monsoon)"],
+      "ph": [5.5, 6.5], "textures": ["Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [1500, 3000], "temp_c": [22, 32],
+      "spacing_cm": {"row": 30, "plant": 20}, "seed_rate_kg_per_ha": 1800,
+      "duration_days": 240,
+      "fertilizer_npk_kg_ha": {"N": 75, "P": 50, "K": 50},
+      "companions": ["banana", "papaya"], "antagonists": [],
+      "notes": "Needs partial shade and well-drained soil; classic underground layer crop."
+    },
+    {
+      "id": "spinach", "name": "Spinach", "common_names": ["Palak"], "category": "leafy",
+      "layer": "ground", "height_m": 0.3,
+      "seasons": ["Rabi (winter)", "Zaid (summer)"],
+      "ph": [6.0, 7.5], "textures": ["Loam / Silt loam", "Clay loam"],
+      "rainfall_mm": [400, 1200], "temp_c": [10, 30],
+      "spacing_cm": {"row": 25, "plant": 10}, "seed_rate_kg_per_ha": 30,
+      "duration_days": 45,
+      "fertilizer_npk_kg_ha": {"N": 80, "P": 40, "K": 40},
+      "companions": ["tomato", "chilli"], "antagonists": [],
+      "notes": "Fast ground-layer leafy; tolerates light shade; multiple cuttings."
+    },
+    {
+      "id": "coriander", "name": "Coriander", "common_names": ["Dhania"], "category": "leafy",
+      "layer": "ground", "height_m": 0.3,
+      "seasons": ["Rabi (winter)"],
+      "ph": [6.0, 7.8], "textures": ["Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [300, 1000], "temp_c": [15, 28],
+      "spacing_cm": {"row": 25, "plant": 15}, "seed_rate_kg_per_ha": 15,
+      "duration_days": 40,
+      "fertilizer_npk_kg_ha": {"N": 40, "P": 30, "K": 20},
+      "companions": ["spinach", "tomato"], "antagonists": [],
+      "notes": "Quick ground cover; good intercrop in early multilayer establishment."
+    },
+    {
+      "id": "tomato", "name": "Tomato", "common_names": ["Tamatar"], "category": "vegetable",
+      "layer": "middle", "height_m": 1.0,
+      "seasons": ["Rabi (winter)", "Kharif (monsoon)"],
+      "ph": [6.0, 7.0], "textures": ["Loam / Silt loam", "Sandy loam", "Clay loam"],
+      "rainfall_mm": [600, 1300], "temp_c": [18, 30],
+      "spacing_cm": {"row": 75, "plant": 45}, "seed_rate_kg_per_ha": 0.4,
+      "duration_days": 120,
+      "fertilizer_npk_kg_ha": {"N": 120, "P": 80, "K": 60},
+      "companions": ["spinach", "coriander", "marigold"], "antagonists": ["potato"],
+      "notes": "Middle-layer staple; needs full sun, so keep on south side of taller crops."
+    },
+    {
+      "id": "brinjal", "name": "Brinjal", "common_names": ["Eggplant", "Baingan"], "category": "vegetable",
+      "layer": "middle", "height_m": 1.0,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [5.5, 7.0], "textures": ["Loam / Silt loam", "Clay loam", "Sandy loam"],
+      "rainfall_mm": [600, 1500], "temp_c": [20, 35],
+      "spacing_cm": {"row": 75, "plant": 60}, "seed_rate_kg_per_ha": 0.5,
+      "duration_days": 150,
+      "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
+      "companions": ["chilli", "spinach"], "antagonists": [],
+      "notes": "Hardy middle-layer crop; long harvest window."
+    },
+    {
+      "id": "chilli", "name": "Chilli", "common_names": ["Mirchi"], "category": "spice",
+      "layer": "middle", "height_m": 0.8,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [6.0, 7.0], "textures": ["Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [600, 1250], "temp_c": [20, 32],
+      "spacing_cm": {"row": 60, "plant": 45}, "seed_rate_kg_per_ha": 1.0,
+      "duration_days": 160,
+      "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
+      "companions": ["tomato", "brinjal", "turmeric"], "antagonists": [],
+      "notes": "Andhra/Telangana mainstay; good middle layer with turmeric understory."
+    },
+    {
+      "id": "okra", "name": "Okra", "common_names": ["Ladyfinger", "Bhindi"], "category": "vegetable",
+      "layer": "middle", "height_m": 1.2,
+      "seasons": ["Kharif (monsoon)", "Zaid (summer)"],
+      "ph": [6.0, 7.5], "textures": ["Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [500, 1200], "temp_c": [22, 35],
+      "spacing_cm": {"row": 60, "plant": 30}, "seed_rate_kg_per_ha": 12,
+      "duration_days": 100,
+      "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
+      "companions": ["chilli", "spinach"], "antagonists": [],
+      "notes": "Fast middle-layer; full sun."
+    },
+    {
+      "id": "beans", "name": "Climbing Beans", "common_names": ["Pole beans", "Sem"], "category": "legume",
+      "layer": "vine", "height_m": 2.5,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [6.0, 7.5], "textures": ["Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [500, 1500], "temp_c": [18, 30],
+      "spacing_cm": {"row": 60, "plant": 25}, "seed_rate_kg_per_ha": 25,
+      "duration_days": 90,
+      "fertilizer_npk_kg_ha": {"N": 25, "P": 60, "K": 50},
+      "companions": ["banana", "papaya", "okra"], "antagonists": [],
+      "notes": "Nitrogen-fixing climber; train on trellis or on tall crops in multilayer."
+    },
+    {
+      "id": "banana", "name": "Banana", "common_names": ["Kela"], "category": "fruit",
+      "layer": "top", "height_m": 4.0,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)", "Zaid (summer)"],
+      "ph": [6.0, 7.5], "textures": ["Loam / Silt loam", "Clay loam"],
+      "rainfall_mm": [1000, 2500], "temp_c": [20, 35],
+      "spacing_cm": {"row": 200, "plant": 200}, "seed_rate_kg_per_ha": 0,
+      "plants_note": "Suckers, not seed",
+      "duration_days": 360,
+      "fertilizer_npk_kg_ha": {"N": 200, "P": 60, "K": 300},
+      "companions": ["turmeric", "ginger", "beans"], "antagonists": [],
+      "notes": "Top-layer canopy; provides shade for turmeric/ginger understory — core of 5-layer systems."
+    },
+    {
+      "id": "papaya", "name": "Papaya", "common_names": ["Papita"], "category": "fruit",
+      "layer": "top", "height_m": 3.5,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [6.0, 7.0], "textures": ["Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [1000, 2000], "temp_c": [22, 35],
+      "spacing_cm": {"row": 180, "plant": 180}, "seed_rate_kg_per_ha": 0.3,
+      "duration_days": 300,
+      "fertilizer_npk_kg_ha": {"N": 200, "P": 200, "K": 250},
+      "companions": ["turmeric", "ginger", "spinach"], "antagonists": [],
+      "notes": "Fast top-layer fruit; partial canopy suitable over shade-tolerant understory."
+    },
+    {
+      "id": "drumstick", "name": "Drumstick", "common_names": ["Moringa", "Sahjan"], "category": "tree-vegetable",
+      "layer": "top", "height_m": 6.0,
+      "seasons": ["Kharif (monsoon)", "Zaid (summer)"],
+      "ph": [6.0, 8.0], "textures": ["Sandy loam", "Loam / Silt loam", "Sandy"],
+      "rainfall_mm": [250, 1500], "temp_c": [25, 40],
+      "spacing_cm": {"row": 250, "plant": 250}, "seed_rate_kg_per_ha": 0.6,
+      "duration_days": 270,
+      "fertilizer_npk_kg_ha": {"N": 75, "P": 40, "K": 40},
+      "companions": ["turmeric", "chilli", "beans"], "antagonists": [],
+      "notes": "Drought-hardy top layer; light canopy ideal for multilayer in dry regions."
+    }
+  ]
+}

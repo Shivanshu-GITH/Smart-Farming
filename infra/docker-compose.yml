@@ -1,0 +1,37 @@
+# Local dev infrastructure for SmartFarm.
+# The API runs fine WITHOUT these (stateless compute). Bring these up when you
+# want persistence (saving fields/plans) and a shared cache.
+#
+#   docker compose -f infra/docker-compose.yml up -d
+#
+# Then set in apps/api/.env:
+#   DATABASE_URL=postgresql+psycopg://smartfarm:smartfarm@localhost:5432/smartfarm
+#   REDIS_URL=redis://localhost:6379/0
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: smartfarm
+      POSTGRES_PASSWORD: smartfarm
+      POSTGRES_DB: smartfarm
+    ports:
+      - "5432:5432"
+    volumes:
+      - sf_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartfarm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - sf_redisdata:/data
+
+volumes:
+  sf_pgdata:
+  sf_redisdata:
