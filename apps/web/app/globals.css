@@ -190,3 +190,8 @@ html, body {
 .chat-input input { flex: 1; background: var(--panel-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .chat-input input:focus { outline: none; border-color: var(--green); }
+
+/* --- economics / profit --- */
+.total-row { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+.tag { font-size: 9px; background: #17341f; color: #6fe39a; border-radius: 4px;
+  padding: 1px 5px; margin-left: 6px; vertical-align: middle; }

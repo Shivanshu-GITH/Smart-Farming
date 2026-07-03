@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult } from "@/lib/api";
+import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import AdvisoryChat from "@/components/AdvisoryChat";
 
@@ -49,6 +49,7 @@ export default function Planner() {
   const [design, setDesign] = useState<DesignResult | null>(null);
   const [designBusy, setDesignBusy] = useState(false);
   const [plans, setPlans] = useState<PlanResult[]>([]);
+  const [economics, setEconomics] = useState<EconomicsResult | null>(null);
 
   function landCtx(): Record<string, unknown> {
     return {
@@ -146,7 +147,7 @@ export default function Planner() {
     setDrawing(true);
     setGeometry(null); setSummary(null); setLand(null); setNdvi(null);
     setRecs([]); setSelected([]); setLayout(null);
-    setValidation(null); setDesign(null); setPlans([]);
+    setValidation(null); setDesign(null); setPlans([]); setEconomics(null);
     if (map.current) {
       (map.current.getSource("field") as any)?.setData(emptyFC());
       (map.current.getSource("plants") as any)?.setData(emptyFC());
@@ -278,6 +279,9 @@ export default function Planner() {
       const ps = await Promise.all(
         selected.map((id) => api.plan(id, areaM2).catch(() => null)));
       setPlans(ps.filter((p): p is PlanResult => p !== null));
+      // Cost / revenue / profit estimate (mandi prices when available).
+      const state = summary?.region?.state;
+      api.economics(selected, areaM2, state).then(setEconomics).catch(() => setEconomics(null));
       if (map.current) {
         (map.current.getSource("plants") as any)?.setData(res.planting_points);
         const heatFC = {
@@ -553,6 +557,38 @@ export default function Planner() {
           </div>
         )}
 
+        {economics && economics.crops.length > 0 && (
+          <div className="card">
+            <h3>5 · Profit estimate</h3>
+            {economics.crops.map((c) => (
+              <div className="kv" key={c.crop_id}>
+                <span className="k">
+                  <span className="dot" style={{ background: LAYER_COLORS[c.layer] }} />
+                  {c.name}
+                  {c.price_source === "mandi" && <span className="tag">mandi</span>}
+                </span>
+                <span className="v" style={{ color: c.margin[0] >= 0 ? "#6fe39a" : "#ff6b57" }}>
+                  {inr(c.margin[0])}–{inr(c.margin[1])}
+                </span>
+              </div>
+            ))}
+            <div className="kv total-row"><span className="k">Total input cost</span>
+              <span className="v">{inr(economics.totals.cost)}</span></div>
+            <div className="kv"><span className="k">Est. revenue</span>
+              <span className="v">{inr(economics.totals.revenue[0])}–{inr(economics.totals.revenue[1])}</span></div>
+            <div className="kv"><span className="k"><b>Net profit / season</b></span>
+              <span className="v"><b style={{ color: economics.totals.margin[0] >= 0 ? "#6fe39a" : "#ff6b57" }}>
+                {inr(economics.totals.margin[0])}–{inr(economics.totals.margin[1])}</b></span></div>
+            {economics.layers > 1 && (
+              <p className="hint" style={{ marginTop: 6 }}>
+                {economics.layers} layers on the same land — multi-layer stacks lift
+                revenue per acre while sharing land cost.
+              </p>
+            )}
+            <p className="disclaimer">{economics.disclaimer}</p>
+          </div>
+        )}
+
         {!geometry && !drawing && (
           <p className="empty">Start by drawing your field on the map.</p>
         )}
@@ -565,6 +601,11 @@ export default function Planner() {
       }} />
     </div>
   );
+}
+
+function inr(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}₹${Math.abs(Math.round(n)).toLocaleString("en-IN")}`;
 }
 
 function emptyFC() {

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "currency": "INR",
+  "note": "Indicative farm economics for planning ONLY — rough pan-India estimates that MUST be validated with local prices and an agronomist/extension officer before any financial decision. Costs are per hectare unless noted; seed_cost_per_kg multiplies the crop's seed rate. yield_kg_per_ha is a typical range. price_per_kg is a fallback farm-gate price used when live mandi data is unavailable. agmarknet_commodity maps to the data.gov.in commodity name for live prices.",
+  "crops": {
+    "turmeric":  {"seed_cost_per_kg": 80,   "input_cost_per_ha": 45000, "labour_cost_per_ha": 55000, "yield_kg_per_ha": [4000, 7000],  "price_per_kg": 90, "agmarknet_commodity": "Turmeric"},
+    "ginger":    {"seed_cost_per_kg": 120,  "input_cost_per_ha": 50000, "labour_cost_per_ha": 60000, "yield_kg_per_ha": [8000, 15000], "price_per_kg": 60, "agmarknet_commodity": "Ginger(Green)"},
+    "spinach":   {"seed_cost_per_kg": 300,  "input_cost_per_ha": 12000, "labour_cost_per_ha": 15000, "yield_kg_per_ha": [8000, 15000], "price_per_kg": 20, "agmarknet_commodity": "Spinach"},
+    "coriander": {"seed_cost_per_kg": 200,  "input_cost_per_ha": 10000, "labour_cost_per_ha": 12000, "yield_kg_per_ha": [3000, 6000],  "price_per_kg": 30, "agmarknet_commodity": "Coriander(Leaves)"},
+    "tomato":    {"seed_cost_per_kg": 8000, "input_cost_per_ha": 40000, "labour_cost_per_ha": 45000, "yield_kg_per_ha": [25000, 50000],"price_per_kg": 12, "agmarknet_commodity": "Tomato"},
+    "brinjal":   {"seed_cost_per_kg": 6000, "input_cost_per_ha": 35000, "labour_cost_per_ha": 40000, "yield_kg_per_ha": [25000, 40000],"price_per_kg": 15, "agmarknet_commodity": "Brinjal"},
+    "chilli":    {"seed_cost_per_kg": 4000, "input_cost_per_ha": 40000, "labour_cost_per_ha": 50000, "yield_kg_per_ha": [8000, 15000], "price_per_kg": 30, "agmarknet_commodity": "Green Chilli"},
+    "okra":      {"seed_cost_per_kg": 800,  "input_cost_per_ha": 30000, "labour_cost_per_ha": 35000, "yield_kg_per_ha": [10000, 18000],"price_per_kg": 25, "agmarknet_commodity": "Bhindi(Ladies Finger)"},
+    "beans":     {"seed_cost_per_kg": 150,  "input_cost_per_ha": 25000, "labour_cost_per_ha": 30000, "yield_kg_per_ha": [8000, 15000], "price_per_kg": 30, "agmarknet_commodity": "Beans"},
+    "banana":    {"seed_cost_per_kg": 0,    "input_cost_per_ha": 90000, "labour_cost_per_ha": 60000, "yield_kg_per_ha": [40000, 60000],"price_per_kg": 15, "agmarknet_commodity": "Banana"},
+    "papaya":    {"seed_cost_per_kg": 6000, "input_cost_per_ha": 70000, "labour_cost_per_ha": 50000, "yield_kg_per_ha": [40000, 80000],"price_per_kg": 15, "agmarknet_commodity": "Papaya"},
+    "drumstick": {"seed_cost_per_kg": 500,  "input_cost_per_ha": 30000, "labour_cost_per_ha": 30000, "yield_kg_per_ha": [10000, 25000],"price_per_kg": 40, "agmarknet_commodity": "Drumstick"}
+  }
+}

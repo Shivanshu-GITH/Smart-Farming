@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     openweather_api_key: str = ""
     sentinelhub_client_id: str = ""
     sentinelhub_client_secret: str = ""
+    # data.gov.in API key for live Agmarknet mandi prices (optional).
+    data_gov_api_key: str = ""
     anthropic_api_key: str = ""
     # Default to the latest, most capable model for advisory chat.
     advisory_model: str = "claude-opus-4-8"

@@ -204,6 +204,39 @@ def build_report_pdf(ctx: dict) -> bytes:
             story.append(Spacer(1, 4))
             story.append(t)
 
+    # 5 · Economics
+    econ = ctx.get("economics")
+    if econ and econ.get("crops"):
+        story.append(Paragraph("Profit estimate (₹)", _H2))
+        header = ["Crop", "Input cost", "Revenue", "Net margin"]
+        rows = [header]
+        for c in econ["crops"]:
+            rows.append([
+                c["name"],
+                f"{c['cost']['total']:,}",
+                f"{c['revenue'][0]:,}-{c['revenue'][1]:,}",
+                f"{c['margin'][0]:,}-{c['margin'][1]:,}",
+            ])
+        tot = econ["totals"]
+        rows.append([
+            "TOTAL",
+            f"{tot['cost']:,}",
+            f"{tot['revenue'][0]:,}-{tot['revenue'][1]:,}",
+            f"{tot['margin'][0]:,}-{tot['margin'][1]:,}",
+        ])
+        t = Table(rows, colWidths=[42 * mm, 32 * mm, 46 * mm, 46 * mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), GREEN),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cce")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        story.append(t)
+        story.append(Paragraph(econ.get("disclaimer", ""), _MUTED))
+
     story.append(Spacer(1, 10))
     story.append(Paragraph(
         "Estimates from a curated knowledge base and open geo-datasets. "

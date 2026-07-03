@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 
 from app.agronomy.plan import build_plan
+from app.economics import mandi
+from app.economics.estimator import estimate
 from app.fields.service import summarize_field
 from app.land_intel.ndvi import get_ndvi
 from app.land_intel.soil import get_soil
@@ -38,6 +40,17 @@ async def generate_report(geometry: dict, crop_ids: list[str]) -> bytes:
 
     layout = generate_layout(geometry, crop_ids) if crop_ids else None
 
+    economics = None
+    if crop_ids:
+        state = (summary.get("region") or {}).get("state")
+        price_info = await mandi.get_prices(crop_ids, state)
+        prices = {
+            cid: info["price_per_kg"]
+            for cid, info in price_info.items()
+            if info.get("source") == "mandi" and info.get("price_per_kg") is not None
+        }
+        economics = estimate(crop_ids, area_m2, prices)
+
     context = {
         "summary": summary,
         "soil": soil,
@@ -45,6 +58,7 @@ async def generate_report(geometry: dict, crop_ids: list[str]) -> bytes:
         "ndvi": ndvi,
         "plans": plans,
         "layout": layout,
+        "economics": economics,
         "ring": geometry.get("coordinates", [[]])[0],
     }
     # reportlab is synchronous/CPU-bound — run it off the event loop.

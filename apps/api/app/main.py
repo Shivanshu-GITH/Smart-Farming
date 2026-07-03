@@ -9,6 +9,7 @@ from app.agronomy.router import router as agronomy_router
 from app.auth.router import router as auth_router
 from app.core.config import get_settings
 from app.core.db import persistence_available
+from app.economics.router import router as economics_router
 from app.fields.router import router as fields_router
 from app.land_intel.router import router as land_intel_router
 from app.layout.router import router as layout_router
@@ -54,3 +55,4 @@ app.include_router(agronomy_router)
 app.include_router(layout_router)
 app.include_router(reports_router)
 app.include_router(advisory_router)
+app.include_router(economics_router)

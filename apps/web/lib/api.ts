@@ -98,6 +98,19 @@ export interface PlanResult {
 
 export interface ChatMessage { role: "user" | "assistant"; content: string; }
 
+export interface EconCrop {
+  crop_id: string; name: string; layer: string;
+  cost: { seed: number; inputs: number; labour: number; total: number };
+  revenue: [number, number]; margin: [number, number];
+  price_per_kg: number; price_source: string;
+}
+export interface EconomicsResult {
+  area_hectares: number; currency: string;
+  crops: EconCrop[];
+  totals: { cost: number; revenue: [number, number]; margin: [number, number] };
+  layers: number; disclaimer: string;
+}
+
 export interface User {
   id: string; phone: string; name?: string | null;
 }
@@ -144,6 +157,9 @@ export const api = {
 
   advisoryChat: (messages: ChatMessage[], context: unknown) =>
     post<{ reply: string }>("/advisory/chat", { messages, context }),
+
+  economics: (crop_ids: string[], area_m2: number, state?: string) =>
+    post<EconomicsResult>("/economics/estimate", { crop_ids, area_m2, state }),
 
   reportPdf: async (geometry: Geometry, crop_ids: string[]): Promise<Blob> => {
     const res = await fetch(`${BASE}/reports/pdf`, {
