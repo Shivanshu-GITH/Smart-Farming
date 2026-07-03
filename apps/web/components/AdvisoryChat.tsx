@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { api, type ChatMessage } from "@/lib/api";
 
 export default function AdvisoryChat({ context }: { context: unknown }) {
@@ -10,6 +11,7 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations("chat");
 
   useEffect(() => {
     if (open && configured === null) {
@@ -32,10 +34,7 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
       const { reply } = await api.advisoryChat(next, context);
       setMessages([...next, { role: "assistant", content: reply }]);
     } catch {
-      setMessages([...next, {
-        role: "assistant",
-        content: "Sorry — the advisor is unavailable right now.",
-      }]);
+      setMessages([...next, { role: "assistant", content: t("error") }]);
     } finally {
       setBusy(false);
     }
@@ -44,41 +43,34 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
   return (
     <>
       <button className="chat-fab" onClick={() => setOpen((o) => !o)}
-        title="Ask the crop advisor">
-        {open ? "✕" : "🌾 Ask advisor"}
+        title={t("title")}>
+        {open ? "✕" : t("ask")}
       </button>
       {open && (
         <div className="chat-panel">
-          <div className="chat-head">Crop advisor</div>
+          <div className="chat-head">{t("title")}</div>
           <div className="chat-body" ref={bodyRef}>
             {configured === false && (
-              <div className="chat-msg assistant">
-                The AI advisor isn’t configured on this server yet
-                (needs an Anthropic API key). You can still use the crop
-                recommendations and layer designer.
-              </div>
+              <div className="chat-msg assistant">{t("notConfigured")}</div>
             )}
             {configured !== false && messages.length === 0 && (
-              <div className="chat-msg assistant">
-                Namaste! 🌱 Ask me about crops for your field, spacing,
-                fertiliser, multi-layer planting, or pests.
-              </div>
+              <div className="chat-msg assistant">{t("greeting")}</div>
             )}
             {messages.map((m, i) => (
               <div key={i} className={"chat-msg " + m.role}>{m.content}</div>
             ))}
-            {busy && <div className="chat-msg assistant">…thinking</div>}
+            {busy && <div className="chat-msg assistant">{t("thinking")}</div>}
           </div>
           <div className="chat-input">
             <input
               value={input}
-              placeholder="Ask about your field…"
+              placeholder={t("placeholder")}
               disabled={configured === false}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") send(); }}
             />
             <button className="btn btn-sm" disabled={busy || configured === false}
-              onClick={send}>Send</button>
+              onClick={send}>{t("send")}</button>
           </div>
         </div>
       )}

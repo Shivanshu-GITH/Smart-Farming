@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SmartFarm">
+  <rect width="512" height="512" rx="96" fill="#0f1413"/>
+  <path d="M256 96c-70 40-118 96-118 176 0 66 48 120 118 132 70-12 118-66 118-132 0-80-48-136-118-176z" fill="#3fae6a"/>
+  <path d="M256 150v250" stroke="#0f1413" stroke-width="14" stroke-linecap="round"/>
+  <path d="M256 236c-34-8-58-30-70-62m70 122c34-8 58-30 70-62" stroke="#0f1413" stroke-width="12" fill="none" stroke-linecap="round"/>
+</svg>

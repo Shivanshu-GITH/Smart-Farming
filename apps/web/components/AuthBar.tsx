@@ -1,24 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { LanguageSwitcher } from "@/lib/i18n";
 
 export default function AuthBar() {
   const { user, ready, login, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const t = useTranslations("auth");
 
   if (!ready) return null;
 
   return (
     <div className="authbar">
+      <LanguageSwitcher />
       {user ? (
         <>
           <span className="authbar-user">📱 {user.phone}</span>
-          <button className="btn btn-sm" onClick={logout}>Sign out</button>
+          <button className="btn btn-sm" onClick={logout}>{t("signOut")}</button>
         </>
       ) : (
-        <button className="btn btn-sm" onClick={() => setOpen(true)}>Sign in</button>
+        <button className="btn btn-sm" onClick={() => setOpen(true)}>{t("signIn")}</button>
       )}
       {open && (
         <LoginModal
@@ -43,6 +47,7 @@ function LoginModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [devHint, setDevHint] = useState<string | null>(null);
+  const t = useTranslations("auth");
 
   async function requestCode() {
     setBusy(true); setError(null);
@@ -54,7 +59,7 @@ function LoginModal({
       }
       setStep("code");
     } catch {
-      setError("Could not send code. Is the API running?");
+      setError(t("sendError"));
     } finally {
       setBusy(false);
     }
@@ -66,7 +71,7 @@ function LoginModal({
       const res = await api.verifyOtp(phone.trim(), code.trim());
       onSuccess(res.access_token, res.user);
     } catch {
-      setError("Invalid or expired code.");
+      setError(t("codeError"));
     } finally {
       setBusy(false);
     }
@@ -75,10 +80,10 @@ function LoginModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Sign in</h3>
+        <h3>{t("signIn")}</h3>
         {step === "phone" ? (
           <>
-            <p className="hint">Enter your phone number to receive a one-time code.</p>
+            <p className="hint">{t("phonePrompt")}</p>
             <input
               className="input"
               placeholder="+91 98765 43210"
@@ -88,14 +93,14 @@ function LoginModal({
             />
             <button className="btn" disabled={busy || phone.trim().length < 6}
               onClick={requestCode}>
-              {busy ? "Sending…" : "Send code"}
+              {busy ? t("sending") : t("sendCode")}
             </button>
           </>
         ) : (
           <>
-            <p className="hint">Enter the 6-digit code sent to {phone}.</p>
+            <p className="hint">{t("codePrompt", { phone })}</p>
             {devHint && (
-              <p className="dev-hint">Dev mode — your code is <b>{devHint}</b></p>
+              <p className="dev-hint">{t("devCode")} <b>{devHint}</b></p>
             )}
             <input
               className="input"
@@ -106,10 +111,10 @@ function LoginModal({
             />
             <button className="btn" disabled={busy || code.trim().length < 4}
               onClick={verify}>
-              {busy ? "Verifying…" : "Verify & sign in"}
+              {busy ? t("verifying") : t("verify")}
             </button>
             <button className="btn-link" onClick={() => setStep("phone")}>
-              ← Change number
+              {t("changeNumber")}
             </button>
           </>
         )}

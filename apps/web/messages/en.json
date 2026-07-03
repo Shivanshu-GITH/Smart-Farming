@@ -1,0 +1,57 @@
+{
+  "brand": { "tagline": "Draw your land → soil & crop intelligence → planting layout" },
+  "lang": { "label": "Language" },
+  "auth": {
+    "signIn": "Sign in", "signOut": "Sign out",
+    "phonePrompt": "Enter your phone number to receive a one-time code.",
+    "sendCode": "Send code", "sending": "Sending…",
+    "codePrompt": "Enter the 6-digit code sent to {phone}.",
+    "verify": "Verify & sign in", "verifying": "Verifying…",
+    "changeNumber": "← Change number", "devCode": "Dev mode — your code is",
+    "sendError": "Could not send code. Is the API running?",
+    "codeError": "Invalid or expired code."
+  },
+  "land": {
+    "title": "1 · Your land",
+    "draw": "✏️ Draw field", "finish": "✓ Finish ({n} pts)",
+    "drawHint": "Click on the map to add corners, then Finish.",
+    "area": "Area", "guntha": "Guntha", "perimeter": "Perimeter", "region": "Region",
+    "nameField": "Name this field", "save": "💾 Save", "saving": "Saving…",
+    "signInToSave": "Sign in to save this field.",
+    "empty": "Start by drawing your field on the map."
+  },
+  "myFields": { "title": "📁 My fields" },
+  "intel": {
+    "title": "2 · Land intelligence",
+    "soilTexture": "Soil texture", "soilPh": "Soil pH", "season": "Season",
+    "rainfall": "Rainfall", "maxTemp": "Max temp", "ndvi": "NDVI (vigour)",
+    "ndviKey": "needs Sentinel Hub key",
+    "disclaimer": "Soil from SoilGrids (~250 m estimate). Verify with a local soil test."
+  },
+  "recommend": {
+    "title": "3 · Recommended crops — pick your layers",
+    "generate": "🌾 Generate planting layout",
+    "design": "🌿 Design my 5-layer farm", "designing": "Designing…",
+    "stacksIntro": "Suggested multi-layer stacks for this land",
+    "noStack": "No compatible stack found for this season.",
+    "use": "use →", "fillEmpty": "Fill empty layers with:"
+  },
+  "layout": {
+    "title": "4 · Planting layout", "totalPlants": "Total plants",
+    "showHeatmap": "Show density heatmap", "calendar": "Crop calendar & inputs",
+    "seed": "seed", "downloadPdf": "📄 Download PDF report", "preparing": "Preparing…"
+  },
+  "profit": {
+    "title": "5 · Profit estimate", "inputCost": "Total input cost",
+    "revenue": "Est. revenue", "netProfit": "Net profit / season",
+    "multiLayer": "{n} layers on the same land — multi-layer stacks lift revenue per acre while sharing land cost."
+  },
+  "chat": {
+    "ask": "🌾 Ask advisor", "title": "Crop advisor",
+    "placeholder": "Ask about your field…", "send": "Send",
+    "greeting": "Namaste! 🌱 Ask me about crops for your field, spacing, fertiliser, multi-layer planting, or pests.",
+    "notConfigured": "The AI advisor isn’t configured on this server yet (needs an Anthropic API key). You can still use the crop recommendations and layer designer.",
+    "thinking": "…thinking",
+    "error": "Sorry — the advisor is unavailable right now."
+  }
+}

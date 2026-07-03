@@ -94,6 +94,11 @@ html, body {
 }
 .authbar-user { font-size: 12px; color: var(--text); }
 .btn-sm { padding: 6px 10px; font-size: 12px; }
+.lang-select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 5px 8px; font-size: 12px; cursor: pointer;
+}
+.lang-select:focus { outline: none; border-color: var(--green); }
 
 .input {
   width: 100%; background: var(--panel); color: var(--text);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import maplibregl from "maplibre-gl";
 import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -28,6 +29,7 @@ const SAT_STYLE: maplibregl.StyleSpecification = {
 };
 
 export default function Planner() {
+  const t = useTranslations();
   const mapEl = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const drawingRef = useRef(false);
@@ -335,42 +337,42 @@ export default function Planner() {
           <span className="leaf">🌱</span>
           <h1>SmartFarm</h1>
         </div>
-        <p className="tagline">Draw your land → soil & crop intelligence → planting layout</p>
+        <p className="tagline">{t("brand.tagline")}</p>
 
         <div className="card">
-          <h3>1 · Your land</h3>
+          <h3>{t("land.title")}</h3>
           <div className="btn-row">
             {!drawing ? (
-              <button className="btn" onClick={startDraw}>✏️ Draw field</button>
+              <button className="btn" onClick={startDraw}>{t("land.draw")}</button>
             ) : (
-              <button className="btn" onClick={finishDraw}>✓ Finish ({vertsRef.current.length} pts)</button>
+              <button className="btn" onClick={finishDraw}>{t("land.finish", { n: vertsRef.current.length })}</button>
             )}
-            {drawing && <span className="hint">Click on the map to add corners, then Finish.</span>}
+            {drawing && <span className="hint">{t("land.drawHint")}</span>}
           </div>
           {busy && <p className="spinner">⏳ {busy}</p>}
           {summary && (
             <div style={{ marginTop: 10 }}>
-              <div className="kv"><span className="k">Area</span>
+              <div className="kv"><span className="k">{t("land.area")}</span>
                 <span className="v">{summary.area.acres} ac · {summary.area.hectares} ha</span></div>
-              <div className="kv"><span className="k">Guntha</span>
+              <div className="kv"><span className="k">{t("land.guntha")}</span>
                 <span className="v">{summary.area.guntha}</span></div>
-              <div className="kv"><span className="k">Perimeter</span>
+              <div className="kv"><span className="k">{t("land.perimeter")}</span>
                 <span className="v">{summary.perimeter_meters} m</span></div>
-              <div className="kv"><span className="k">Region</span>
+              <div className="kv"><span className="k">{t("land.region")}</span>
                 <span className="v">{summary.region.district || summary.region.village || "—"}, {summary.region.state || ""}</span></div>
             </div>
           )}
           {geometry && summary && (
             user ? (
               <div className="save-row">
-                <input className="input" placeholder="Name this field"
+                <input className="input" placeholder={t("land.nameField")}
                   value={fieldName} onChange={(e) => setFieldName(e.target.value)} />
                 <button className="btn btn-sm" disabled={saving} onClick={saveField}>
-                  {saving ? "Saving…" : "💾 Save"}
+                  {saving ? t("land.saving") : t("land.save")}
                 </button>
               </div>
             ) : (
-              <p className="hint" style={{ marginTop: 8 }}>Sign in to save this field.</p>
+              <p className="hint" style={{ marginTop: 8 }}>{t("land.signInToSave")}</p>
             )
           )}
           {saveMsg && <p className="hint" style={{ marginTop: 6 }}>{saveMsg}</p>}
@@ -378,7 +380,7 @@ export default function Planner() {
 
         {user && savedFields.length > 0 && (
           <div className="card">
-            <h3>📁 My fields</h3>
+            <h3>{t("myFields.title")}</h3>
             {savedFields.map((f) => (
               <div className="saved-field" key={f.id}>
                 <button className="btn-link" onClick={() => loadSavedField(f)}>
@@ -396,33 +398,33 @@ export default function Planner() {
 
         {land && (
           <div className="card">
-            <h3>2 · Land intelligence</h3>
-            <div className="kv"><span className="k">Soil texture</span>
+            <h3>{t("intel.title")}</h3>
+            <div className="kv"><span className="k">{t("intel.soilTexture")}</span>
               <span className="v">{land.soil?.texture_class || "—"}</span></div>
-            <div className="kv"><span className="k">Soil pH</span>
+            <div className="kv"><span className="k">{t("intel.soilPh")}</span>
               <span className="v">{land.soil?.ph ?? "—"}</span></div>
-            <div className="kv"><span className="k">Season</span>
+            <div className="kv"><span className="k">{t("intel.season")}</span>
               <span className="v">{land.climate?.season || "—"}</span></div>
-            <div className="kv"><span className="k">Rainfall</span>
+            <div className="kv"><span className="k">{t("intel.rainfall")}</span>
               <span className="v">{land.climate?.annual_rainfall_mm ?? "—"} mm ({land.climate?.rainfall_band || "—"})</span></div>
-            <div className="kv"><span className="k">Max temp</span>
+            <div className="kv"><span className="k">{t("intel.maxTemp")}</span>
               <span className="v">{land.climate?.temp_max_avg_c ?? "—"} °C</span></div>
             {ndvi?.mean != null && (
-              <div className="kv"><span className="k">NDVI (vigour)</span>
+              <div className="kv"><span className="k">{t("intel.ndvi")}</span>
                 <span className="v">{ndvi.mean} · {ndvi.vigour || "—"}</span></div>
             )}
             {ndvi && ndvi.configured === false && (
               <div className="kv"><span className="k">NDVI</span>
                 <span className="v" style={{ color: "var(--muted)", fontWeight: 400 }}>
-                  needs Sentinel Hub key</span></div>
+                  {t("intel.ndviKey")}</span></div>
             )}
-            <p className="disclaimer">Soil from SoilGrids (~250 m estimate). Verify with a local soil test.</p>
+            <p className="disclaimer">{t("intel.disclaimer")}</p>
           </div>
         )}
 
         {recs.length > 0 && (
           <div className="card">
-            <h3>3 · Recommended crops — pick your layers</h3>
+            <h3>{t("recommend.title")}</h3>
             {recs.map((r) => (
               <div key={r.crop_id}
                 className={"crop" + (selected.includes(r.crop_id) ? " selected" : "")}
@@ -440,21 +442,21 @@ export default function Planner() {
             <div className="btn-row" style={{ marginTop: 8 }}>
               <button className="btn secondary" disabled={designBusy || !land}
                 onClick={designStack}>
-                {designBusy ? "Designing…" : "🌿 Design my 5-layer farm"}
+                {designBusy ? t("recommend.designing") : t("recommend.design")}
               </button>
             </div>
 
             {design && (
               <div className="stacks">
-                <p className="hint">Suggested multi-layer stacks for this land
+                <p className="hint">{t("recommend.stacksIntro")}
                   {design.season ? ` (${design.season})` : ""}:</p>
                 {design.stacks.length === 0 && (
-                  <p className="hint">No compatible stack found for this season.</p>)}
+                  <p className="hint">{t("recommend.noStack")}</p>)}
                 {design.stacks.map((st, i) => (
                   <div className="stack" key={i} onClick={() => applyStack(st)}>
                     <div className="stack-head">
-                      Stack {i + 1} · {st.filled_layers} layers
-                      <span className="badge ok">use →</span>
+                      Stack {i + 1} · {st.filled_layers}
+                      <span className="badge ok">{t("recommend.use")}</span>
                     </div>
                     {st.layers.map((L) => (
                       <div className="kv" key={L.crop_id}>
@@ -483,7 +485,7 @@ export default function Planner() {
 
             {validation?.fillers && Object.keys(validation.fillers).length > 0 && (
               <div className="fillers">
-                <p className="hint">Fill empty layers with:</p>
+                <p className="hint">{t("recommend.fillEmpty")}</p>
                 {Object.entries(validation.fillers).map(([layer, cands]) => (
                   <div className="kv" key={layer}>
                     <span className="k"><span className="dot"
@@ -503,15 +505,15 @@ export default function Planner() {
 
             <button className="btn" style={{ marginTop: 8 }}
               disabled={selected.length === 0} onClick={generateLayout}>
-              🌾 Generate planting layout
+              {t("recommend.generate")}
             </button>
           </div>
         )}
 
         {layout && (
           <div className="card">
-            <h3>4 · Planting layout</h3>
-            <div className="kv"><span className="k">Total plants</span>
+            <h3>{t("layout.title")}</h3>
+            <div className="kv"><span className="k">{t("layout.totalPlants")}</span>
               <span className="v">{layout.total_plants.toLocaleString()}{layout.truncated ? "+ (sampled)" : ""}</span></div>
             {layout.crops.map((c) => (
               <div className="kv" key={c.crop_id}>
@@ -522,12 +524,12 @@ export default function Planner() {
 
             {plans.length > 0 && (
               <div className="calendar">
-                <p className="hint" style={{ marginTop: 8 }}>Crop calendar & inputs</p>
+                <p className="hint" style={{ marginTop: 8 }}>{t("layout.calendar")}</p>
                 {plans.map((p) => (
                   <details className="cal-crop" key={p.crop.id}>
                     <summary>
                       <span className="dot" style={{ background: LAYER_COLORS[p.crop.layer] }} />
-                      {p.crop.name} · {p.seed.quantity_kg} kg seed ·
+                      {p.crop.name} · {p.seed.quantity_kg} kg {t("layout.seed")} ·
                       N{p.fertilizer.total_kg.N}-P{p.fertilizer.total_kg.P}-K{p.fertilizer.total_kg.K}
                     </summary>
                     {p.calendar.map((s) => (
@@ -542,7 +544,7 @@ export default function Planner() {
             )}
             <div className="btn-row" style={{ marginTop: 10 }}>
               <label className="hint">
-                <input type="checkbox" onChange={(e) => toggleHeatmap(e.target.checked)} /> Show density heatmap
+                <input type="checkbox" onChange={(e) => toggleHeatmap(e.target.checked)} /> {t("layout.showHeatmap")}
               </label>
             </div>
             <div className="legend">
@@ -552,14 +554,14 @@ export default function Planner() {
             </div>
             <button className="btn secondary" style={{ marginTop: 10, width: "100%" }}
               disabled={pdfBusy} onClick={downloadPdf}>
-              {pdfBusy ? "Preparing…" : "📄 Download PDF report"}
+              {pdfBusy ? t("layout.preparing") : t("layout.downloadPdf")}
             </button>
           </div>
         )}
 
         {economics && economics.crops.length > 0 && (
           <div className="card">
-            <h3>5 · Profit estimate</h3>
+            <h3>{t("profit.title")}</h3>
             {economics.crops.map((c) => (
               <div className="kv" key={c.crop_id}>
                 <span className="k">
@@ -572,17 +574,16 @@ export default function Planner() {
                 </span>
               </div>
             ))}
-            <div className="kv total-row"><span className="k">Total input cost</span>
+            <div className="kv total-row"><span className="k">{t("profit.inputCost")}</span>
               <span className="v">{inr(economics.totals.cost)}</span></div>
-            <div className="kv"><span className="k">Est. revenue</span>
+            <div className="kv"><span className="k">{t("profit.revenue")}</span>
               <span className="v">{inr(economics.totals.revenue[0])}–{inr(economics.totals.revenue[1])}</span></div>
-            <div className="kv"><span className="k"><b>Net profit / season</b></span>
+            <div className="kv"><span className="k"><b>{t("profit.netProfit")}</b></span>
               <span className="v"><b style={{ color: economics.totals.margin[0] >= 0 ? "#6fe39a" : "#ff6b57" }}>
                 {inr(economics.totals.margin[0])}–{inr(economics.totals.margin[1])}</b></span></div>
             {economics.layers > 1 && (
               <p className="hint" style={{ marginTop: 6 }}>
-                {economics.layers} layers on the same land — multi-layer stacks lift
-                revenue per acre while sharing land cost.
+                {t("profit.multiLayer", { n: economics.layers })}
               </p>
             )}
             <p className="disclaimer">{economics.disclaimer}</p>
@@ -590,7 +591,7 @@ export default function Planner() {
         )}
 
         {!geometry && !drawing && (
-          <p className="empty">Start by drawing your field on the map.</p>
+          <p className="empty">{t("land.empty")}</p>
         )}
       </aside>
       <AdvisoryChat context={{

@@ -1,0 +1,15 @@
+{
+  "name": "SmartFarm — Farm Planner",
+  "short_name": "SmartFarm",
+  "description": "Draw your land, get soil & crop intelligence, and plan your multi-layer planting layout.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1413",
+  "theme_color": "#3fae6a",
+  "categories": ["agriculture", "productivity", "utilities"],
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" }
+  ]
+}
