@@ -18,7 +18,7 @@ _HEADERS = {"User-Agent": "SmartFarm/0.1 (precision-farm-planning)"}
 async def reverse_geocode(lat: float, lon: float) -> dict:
     """Look up village/district/state for a point (cached, OSM Nominatim)."""
     key = cache.geo_key("geocode", lat, lon, precision=2)
-    cached = cache.get(key)
+    cached = await cache.get(key)
     if cached is not None:
         return cached
 
@@ -42,7 +42,7 @@ async def reverse_geocode(lat: float, lon: float) -> dict:
     except (httpx.HTTPError, ValueError):
         pass  # region stays as the empty template — geometry still returns
 
-    cache.set(key, region, ttl_seconds=7 * 86_400)
+    await cache.set(key, region, ttl_seconds=7 * 86_400)
     return region
 
 

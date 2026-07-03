@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry } from "@/lib/api";
+import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import AdvisoryChat from "@/components/AdvisoryChat";
 
 const LAYER_COLORS: Record<string, string> = {
   underground: "#b5651d",
@@ -35,10 +37,52 @@ export default function Planner() {
   const [geometry, setGeometry] = useState<Geometry | null>(null);
   const [summary, setSummary] = useState<FieldSummary | null>(null);
   const [land, setLand] = useState<any>(null);
+  const [ndvi, setNdvi] = useState<any>(null);
   const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [layout, setLayout] = useState<LayoutResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+
+  // ---- Stage 3: moat (validation, 5-layer design, calendar) ----
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [design, setDesign] = useState<DesignResult | null>(null);
+  const [designBusy, setDesignBusy] = useState(false);
+  const [plans, setPlans] = useState<PlanResult[]>([]);
+
+  function landCtx(): Record<string, unknown> {
+    return {
+      ph: land?.soil?.ph ?? undefined,
+      texture: land?.soil?.texture_class ?? undefined,
+      rainfall_mm: land?.climate?.annual_rainfall_mm ?? undefined,
+      temp_max_c: land?.climate?.temp_max_avg_c ?? undefined,
+      season: land?.climate?.season ?? undefined,
+    };
+  }
+
+  // Validate the selected multi-layer combo whenever the selection changes.
+  useEffect(() => {
+    if (selected.length === 0) { setValidation(null); return; }
+    let cancelled = false;
+    api.validate(selected, landCtx())
+      .then((v) => { if (!cancelled) setValidation(v); })
+      .catch(() => { if (!cancelled) setValidation(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, land]);
+
+  // ---- auth + saved fields ----
+  const { user } = useAuth();
+  const [savedFields, setSavedFields] = useState<SavedField[]>([]);
+  const [fieldName, setFieldName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  // Load the user's saved fields whenever they sign in (clear on sign-out).
+  useEffect(() => {
+    if (!user) { setSavedFields([]); return; }
+    api.listFields().then(setSavedFields).catch(() => {});
+  }, [user]);
 
   // ---- map init ----
   useEffect(() => {
@@ -100,8 +144,9 @@ export default function Planner() {
     vertsRef.current = [];
     drawingRef.current = true;
     setDrawing(true);
-    setGeometry(null); setSummary(null); setLand(null);
+    setGeometry(null); setSummary(null); setLand(null); setNdvi(null);
     setRecs([]); setSelected([]); setLayout(null);
+    setValidation(null); setDesign(null); setPlans([]);
     if (map.current) {
       (map.current.getSource("field") as any)?.setData(emptyFC());
       (map.current.getSource("plants") as any)?.setData(emptyFC());
@@ -117,13 +162,60 @@ export default function Planner() {
     if (verts.length < 3 || !map.current) return;
     const ring = [...verts, verts[0]];
     const geom: Geometry = { type: "Polygon", coordinates: [ring] };
-    setGeometry(geom);
     (map.current.getSource("draw") as any)?.setData(emptyFC());
-    (map.current.getSource("field") as any)?.setData({
-      type: "FeatureCollection",
-      features: [{ type: "Feature", geometry: geom, properties: {} }],
-    });
+    await applyGeometry(geom, { fit: false });
+  }
+
+  /** Render a polygon as the active field and run the analysis pipeline.
+   *  Shared by fresh drawing and loading a saved field. */
+  async function applyGeometry(geom: Geometry, opts: { fit: boolean }) {
+    setGeometry(geom);
+    setSaveMsg(null);
+    setFieldName("");
+    if (map.current) {
+      (map.current.getSource("field") as any)?.setData({
+        type: "FeatureCollection",
+        features: [{ type: "Feature", geometry: geom, properties: {} }],
+      });
+      (map.current.getSource("plants") as any)?.setData(emptyFC());
+      (map.current.getSource("heat") as any)?.setData(emptyFC());
+      if (opts.fit) fitToRing(map.current, geom.coordinates[0]);
+    }
+    setLayout(null); setSelected([]);
     await analyze(geom);
+  }
+
+  async function saveField() {
+    if (!geometry || !user) return;
+    setSaving(true); setSaveMsg(null);
+    try {
+      const name = fieldName.trim() ||
+        summary?.region?.village || summary?.region?.district || "My field";
+      const saved = await api.createField(name, geometry);
+      setSavedFields((cur) => [saved, ...cur]);
+      setSaveMsg(`Saved “${saved.name}”.`);
+      setFieldName("");
+    } catch {
+      setSaveMsg("Could not save field.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function loadSavedField(f: SavedField) {
+    startDraw();               // reset all state + map layers
+    drawingRef.current = false;
+    setDrawing(false);
+    await applyGeometry(f.geometry, { fit: true });
+  }
+
+  async function deleteSavedField(id: string) {
+    try {
+      await api.deleteField(id);
+      setSavedFields((cur) => cur.filter((f) => f.id !== id));
+    } catch {
+      /* ignore */
+    }
   }
 
   async function analyze(geom: Geometry) {
@@ -134,6 +226,8 @@ export default function Planner() {
       setBusy("Fetching soil & climate…");
       const report = await api.landReport(s.centroid.lat, s.centroid.lon).catch(() => null);
       setLand(report);
+      // NDVI needs the polygon; fetch in the background (may be unconfigured).
+      api.ndvi(geom).then(setNdvi).catch(() => setNdvi(null));
       setBusy("Recommending crops…");
       const recRes = await api.recommend({
         ph: report?.soil?.ph ?? undefined,
@@ -156,12 +250,34 @@ export default function Planner() {
       cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id]);
   }
 
+  async function designStack() {
+    if (!land) return;
+    setDesignBusy(true);
+    try {
+      setDesign(await api.design(landCtx()));
+    } catch {
+      setDesign(null);
+    } finally {
+      setDesignBusy(false);
+    }
+  }
+
+  function applyStack(stack: DesignStack) {
+    setSelected(stack.crop_ids);
+    setDesign(null);
+  }
+
   async function generateLayout() {
     if (!geometry || selected.length === 0) return;
     setBusy("Placing plants…");
     try {
       const res = await api.layout(geometry, selected);
       setLayout(res);
+      // Fetch per-crop plans (seed / fertiliser / calendar) for the summary.
+      const areaM2 = summary?.area.square_meters ?? 0;
+      const ps = await Promise.all(
+        selected.map((id) => api.plan(id, areaM2).catch(() => null)));
+      setPlans(ps.filter((p): p is PlanResult => p !== null));
       if (map.current) {
         (map.current.getSource("plants") as any)?.setData(res.planting_points);
         const heatFC = {
@@ -187,6 +303,24 @@ export default function Planner() {
 
   function toggleHeatmap(on: boolean) {
     map.current?.setPaintProperty("heat-fill", "fill-opacity", on ? 0.5 : 0.0);
+  }
+
+  async function downloadPdf() {
+    if (!geometry) return;
+    setPdfBusy(true);
+    try {
+      const blob = await api.reportPdf(geometry, selected);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "smartfarm-report.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   return (
@@ -222,7 +356,39 @@ export default function Planner() {
                 <span className="v">{summary.region.district || summary.region.village || "—"}, {summary.region.state || ""}</span></div>
             </div>
           )}
+          {geometry && summary && (
+            user ? (
+              <div className="save-row">
+                <input className="input" placeholder="Name this field"
+                  value={fieldName} onChange={(e) => setFieldName(e.target.value)} />
+                <button className="btn btn-sm" disabled={saving} onClick={saveField}>
+                  {saving ? "Saving…" : "💾 Save"}
+                </button>
+              </div>
+            ) : (
+              <p className="hint" style={{ marginTop: 8 }}>Sign in to save this field.</p>
+            )
+          )}
+          {saveMsg && <p className="hint" style={{ marginTop: 6 }}>{saveMsg}</p>}
         </div>
+
+        {user && savedFields.length > 0 && (
+          <div className="card">
+            <h3>📁 My fields</h3>
+            {savedFields.map((f) => (
+              <div className="saved-field" key={f.id}>
+                <button className="btn-link" onClick={() => loadSavedField(f)}>
+                  {f.name}
+                </button>
+                <span className="meta">
+                  {f.area ? `${f.area.acres} ac` : ""}
+                </span>
+                <button className="icon-btn" title="Delete"
+                  onClick={() => deleteSavedField(f.id)}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {land && (
           <div className="card">
@@ -237,6 +403,15 @@ export default function Planner() {
               <span className="v">{land.climate?.annual_rainfall_mm ?? "—"} mm ({land.climate?.rainfall_band || "—"})</span></div>
             <div className="kv"><span className="k">Max temp</span>
               <span className="v">{land.climate?.temp_max_avg_c ?? "—"} °C</span></div>
+            {ndvi?.mean != null && (
+              <div className="kv"><span className="k">NDVI (vigour)</span>
+                <span className="v">{ndvi.mean} · {ndvi.vigour || "—"}</span></div>
+            )}
+            {ndvi && ndvi.configured === false && (
+              <div className="kv"><span className="k">NDVI</span>
+                <span className="v" style={{ color: "var(--muted)", fontWeight: 400 }}>
+                  needs Sentinel Hub key</span></div>
+            )}
             <p className="disclaimer">Soil from SoilGrids (~250 m estimate). Verify with a local soil test.</p>
           </div>
         )}
@@ -258,6 +433,70 @@ export default function Planner() {
                 </span>
               </div>
             ))}
+            <div className="btn-row" style={{ marginTop: 8 }}>
+              <button className="btn secondary" disabled={designBusy || !land}
+                onClick={designStack}>
+                {designBusy ? "Designing…" : "🌿 Design my 5-layer farm"}
+              </button>
+            </div>
+
+            {design && (
+              <div className="stacks">
+                <p className="hint">Suggested multi-layer stacks for this land
+                  {design.season ? ` (${design.season})` : ""}:</p>
+                {design.stacks.length === 0 && (
+                  <p className="hint">No compatible stack found for this season.</p>)}
+                {design.stacks.map((st, i) => (
+                  <div className="stack" key={i} onClick={() => applyStack(st)}>
+                    <div className="stack-head">
+                      Stack {i + 1} · {st.filled_layers} layers
+                      <span className="badge ok">use →</span>
+                    </div>
+                    {st.layers.map((L) => (
+                      <div className="kv" key={L.crop_id}>
+                        <span className="k">
+                          <span className="dot" style={{ background: LAYER_COLORS[L.layer] }} />
+                          {L.layer}</span>
+                        <span className="v">{L.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {validation && (validation.conflicts.length > 0 ||
+              validation.warnings.length > 0 || validation.synergies.length > 0) && (
+              <div className="validation">
+                {validation.conflicts.map((c, i) => (
+                  <p key={"c" + i} className="v-conflict">⛔ {c.message}</p>))}
+                {validation.warnings.map((w, i) => (
+                  <p key={"w" + i} className="v-warn">⚠️ {w.message}</p>))}
+                {validation.synergies.map((s, i) => (
+                  <p key={"s" + i} className="v-syn">✅ {s.message}</p>))}
+              </div>
+            )}
+
+            {validation?.fillers && Object.keys(validation.fillers).length > 0 && (
+              <div className="fillers">
+                <p className="hint">Fill empty layers with:</p>
+                {Object.entries(validation.fillers).map(([layer, cands]) => (
+                  <div className="kv" key={layer}>
+                    <span className="k"><span className="dot"
+                      style={{ background: LAYER_COLORS[layer] }} />{layer}</span>
+                    <span className="v">
+                      {cands.map((c) => (
+                        <button key={c.crop_id} className="chip"
+                          onClick={() => toggleCrop(c.crop_id)}>
+                          + {c.name}{c.companion_with.length ? " ★" : ""}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <button className="btn" style={{ marginTop: 8 }}
               disabled={selected.length === 0} onClick={generateLayout}>
               🌾 Generate planting layout
@@ -276,6 +515,27 @@ export default function Planner() {
                 <span className="v">{c.plant_count.toLocaleString()}</span>
               </div>
             ))}
+
+            {plans.length > 0 && (
+              <div className="calendar">
+                <p className="hint" style={{ marginTop: 8 }}>Crop calendar & inputs</p>
+                {plans.map((p) => (
+                  <details className="cal-crop" key={p.crop.id}>
+                    <summary>
+                      <span className="dot" style={{ background: LAYER_COLORS[p.crop.layer] }} />
+                      {p.crop.name} · {p.seed.quantity_kg} kg seed ·
+                      N{p.fertilizer.total_kg.N}-P{p.fertilizer.total_kg.P}-K{p.fertilizer.total_kg.K}
+                    </summary>
+                    {p.calendar.map((s) => (
+                      <div className="kv" key={s.stage}>
+                        <span className="k">{s.stage}</span>
+                        <span className="v">day {s.day} · {s.date}</span>
+                      </div>
+                    ))}
+                  </details>
+                ))}
+              </div>
+            )}
             <div className="btn-row" style={{ marginTop: 10 }}>
               <label className="hint">
                 <input type="checkbox" onChange={(e) => toggleHeatmap(e.target.checked)} /> Show density heatmap
@@ -286,6 +546,10 @@ export default function Planner() {
                 <span key={k}><span className="dot" style={{ background: v }} />{k}</span>
               ))}
             </div>
+            <button className="btn secondary" style={{ marginTop: 10, width: "100%" }}
+              disabled={pdfBusy} onClick={downloadPdf}>
+              {pdfBusy ? "Preparing…" : "📄 Download PDF report"}
+            </button>
           </div>
         )}
 
@@ -293,12 +557,26 @@ export default function Planner() {
           <p className="empty">Start by drawing your field on the map.</p>
         )}
       </aside>
+      <AdvisoryChat context={{
+        area: summary?.area, region: summary?.region,
+        soil: land?.soil, climate: land?.climate,
+        ndvi: ndvi ? { mean: ndvi.mean, vigour: ndvi.vigour } : null,
+        selected_crops: selected,
+      }} />
     </div>
   );
 }
 
 function emptyFC() {
   return { type: "FeatureCollection", features: [] } as any;
+}
+
+function fitToRing(m: maplibregl.Map, ring: number[][]) {
+  if (!ring.length) return;
+  const b = new maplibregl.LngLatBounds(
+    [ring[0][0], ring[0][1]], [ring[0][0], ring[0][1]]);
+  for (const [lng, lat] of ring) b.extend([lng, lat]);
+  m.fitBounds(b, { padding: 60, duration: 600 });
 }
 
 function renderDraw(m: maplibregl.Map, verts: number[][]) {

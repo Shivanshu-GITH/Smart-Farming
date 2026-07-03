@@ -4,11 +4,15 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.advisory.router import router as advisory_router
 from app.agronomy.router import router as agronomy_router
+from app.auth.router import router as auth_router
 from app.core.config import get_settings
+from app.core.db import persistence_available
 from app.fields.router import router as fields_router
 from app.land_intel.router import router as land_intel_router
 from app.layout.router import router as layout_router
+from app.reports.router import router as reports_router
 
 settings = get_settings()
 
@@ -33,7 +37,7 @@ def root() -> dict:
     return {
         "name": settings.app_name,
         "version": settings.version,
-        "persistence": settings.persistence_enabled,
+        "persistence": persistence_available(),
         "docs": "/docs",
     }
 
@@ -43,7 +47,10 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+app.include_router(auth_router)
 app.include_router(fields_router)
 app.include_router(land_intel_router)
 app.include_router(agronomy_router)
 app.include_router(layout_router)
+app.include_router(reports_router)
+app.include_router(advisory_router)

@@ -27,7 +27,7 @@ def current_indian_season(today: dt.date | None = None) -> str:
 
 async def get_climate(lat: float, lon: float) -> dict:
     key = cache.geo_key("climate", lat, lon, precision=2)
-    cached = cache.get(key)
+    cached = await cache.get(key)
     if cached is not None:
         return cached
 
@@ -62,7 +62,8 @@ async def get_climate(lat: float, lon: float) -> dict:
     except (httpx.HTTPError, ValueError, ZeroDivisionError):
         result["error"] = "Climate data unavailable; try again shortly"
 
-    cache.set(key, result, ttl_seconds=7 * 86_400)
+    if "error" not in result:
+        await cache.set(key, result, ttl_seconds=7 * 86_400)
     return result
 
 

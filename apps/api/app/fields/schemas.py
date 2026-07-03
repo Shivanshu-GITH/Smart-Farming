@@ -35,3 +35,19 @@ class FieldSummary(BaseModel):
     centroid: dict  # {"lat": .., "lon": ..}
     bbox: list[float]  # [min_lon, min_lat, max_lon, max_lat]
     region: Region
+
+
+# --- Persistence (saved fields) ---
+
+class FieldCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    geometry: GeoJSONGeometry
+
+
+class FieldOut(BaseModel):
+    id: str
+    name: str
+    geometry: dict  # GeoJSON Polygon
+    area: AreaBreakdown | None = None
+    region: Region | None = None
+    created_at: str

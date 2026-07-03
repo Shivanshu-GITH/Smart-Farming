@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     sentinelhub_client_id: str = ""
     sentinelhub_client_secret: str = ""
     anthropic_api_key: str = ""
+    # Default to the latest, most capable model for advisory chat.
+    advisory_model: str = "claude-opus-4-8"
+
+    # Auth (phone/OTP + JWT). CHANGE jwt_secret in production.
+    jwt_secret: str = "dev-insecure-change-me"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+    otp_ttl_seconds: int = 300  # OTP valid for 5 minutes
+    # In dev (no SMS gateway) the requested OTP is returned in the API response
+    # and logged, so you can sign in without a phone. NEVER enable in production.
+    otp_dev_mode: bool = True
 
     # CORS
     cors_origins: str = "http://localhost:3000"

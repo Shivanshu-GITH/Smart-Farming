@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from .catalogue import all_crops, layers
+from .compatibility import suggest_fillers, validate_combo
+from .optimizer import design_stacks
 from .plan import build_plan
 from .recommend import recommend
 
@@ -45,3 +47,45 @@ def crop_plan(q: PlanQuery) -> dict:
         return build_plan(q.crop_id, q.area_m2)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class ValidateQuery(BaseModel):
+    crop_ids: list[str]
+    # optional land context — enables filler suggestions for empty layers
+    ph: float | None = None
+    texture: str | None = None
+    rainfall_mm: float | None = None
+    temp_max_c: float | None = None
+    season: str | None = None
+    suggest_fillers: bool = True
+
+
+@router.post("/validate")
+def validate(q: ValidateQuery) -> dict:
+    """Check whether a chosen multi-layer crop combo works together, and suggest
+    compatible crops for the empty vertical layers."""
+    result = validate_combo(q.crop_ids)
+    if q.suggest_fillers:
+        result["fillers"] = suggest_fillers(
+            q.crop_ids, ph=q.ph, texture=q.texture, rainfall=q.rainfall_mm,
+            temp_max=q.temp_max_c, season=q.season,
+        )
+    return result
+
+
+class DesignQuery(BaseModel):
+    ph: float | None = None
+    texture: str | None = None
+    rainfall_mm: float | None = None
+    temp_max_c: float | None = None
+    season: str | None = None
+    max_stacks: int = 3
+
+
+@router.post("/design")
+def design(q: DesignQuery) -> dict:
+    """Propose complete multi-layer (up to 5-layer) planting stacks for the land."""
+    return design_stacks(
+        ph=q.ph, texture=q.texture, rainfall=q.rainfall_mm,
+        temp_max=q.temp_max_c, season=q.season, max_stacks=q.max_stacks,
+    )

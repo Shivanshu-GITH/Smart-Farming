@@ -45,17 +45,24 @@ def _texture_class(sand: float | None, clay: float | None) -> str | None:
 
 async def get_soil(lat: float, lon: float) -> dict:
     key = cache.geo_key("soil", lat, lon, precision=3)
-    cached = cache.get(key)
+    cached = await cache.get(key)
     if cached is not None:
         return cached
+
+    result: dict = {"source": "ISRIC SoilGrids v2.0", "estimate": True,
+                    "properties": {}, "lat": lat, "lon": lon}
+
+    # Respect SoilGrids' ~5 calls/min cap (shared across instances via Redis).
+    # On a cold cache burst we return a soft error instead of getting throttled.
+    if not await cache.allow("rl:soilgrids", limit=5, window_seconds=60):
+        result["error"] = "Soil service busy (rate limit); try again shortly"
+        return result
 
     params = [("lat", lat), ("lon", lon), ("depth", "0-5cm"),
               ("depth", "5-15cm"), ("value", "mean")]
     for p in _PROPS:
         params.append(("property", p))
 
-    result: dict = {"source": "ISRIC SoilGrids v2.0", "estimate": True,
-                    "properties": {}, "lat": lat, "lon": lon}
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(SOILGRIDS_URL, params=params)
@@ -79,5 +86,7 @@ async def get_soil(lat: float, lon: float) -> dict:
     result["texture_class"] = _texture_class(sand, clay)
     result["ph"] = props.get("phh2o", {}).get("value")
 
-    cache.set(key, result, ttl_seconds=30 * 86_400)
+    # Only cache successful lookups so a transient error isn't pinned for 30 days.
+    if "error" not in result:
+        await cache.set(key, result, ttl_seconds=30 * 86_400)
     return result
