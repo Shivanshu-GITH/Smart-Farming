@@ -1,0 +1,61 @@
+# Full-stack SmartFarm (db + redis + api + web). Build from the repo root:
+#   docker compose -f infra/docker-compose.app.yml up --build
+# Secrets/keys are read from the environment (or a .env file next to this one).
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: smartfarm
+      POSTGRES_PASSWORD: smartfarm
+      POSTGRES_DB: smartfarm
+    volumes:
+      - sf_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartfarm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - sf_redisdata:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://smartfarm:smartfarm@db:5432/smartfarm
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      OTP_DEV_MODE: ${OTP_DEV_MODE:-true}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SENTINELHUB_CLIENT_ID: ${SENTINELHUB_CLIENT_ID:-}
+      SENTINELHUB_CLIENT_SECRET: ${SENTINELHUB_CLIENT_SECRET:-}
+      DATA_GOV_API_KEY: ${DATA_GOV_API_KEY:-}
+    # Apply migrations, then serve.
+    command: >
+      sh -c "python -m alembic upgrade head &&
+             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  sf_pgdata:
+  sf_redisdata:
