@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.fields.schemas import GeoJSONGeometry
 
+from .elevation import get_elevation
 from .ndvi import get_ndvi, get_ndvi_series
 from .soil import get_soil
 from .weather import get_climate
@@ -31,6 +32,12 @@ async def soil(lat: float, lon: float) -> dict:
 @router.get("/climate")
 async def climate(lat: float, lon: float) -> dict:
     return await get_climate(lat, lon)
+
+
+@router.get("/elevation")
+async def elevation(lat: float, lon: float) -> dict:
+    """Terrain elevation, coarse slope and aspect for a point."""
+    return await get_elevation(lat, lon)
 
 
 @router.get("/report")

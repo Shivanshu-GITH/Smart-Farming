@@ -25,7 +25,7 @@
     "title": "2 · భూమి సమాచారం",
     "soilTexture": "నేల ఆకృతి", "soilPh": "నేల pH", "season": "కాలం",
     "rainfall": "వర్షపాతం", "maxTemp": "గరిష్ఠ ఉష్ణోగ్రత", "ndvi": "NDVI (పచ్చదనం)",
-    "ndviKey": "Sentinel Hub కీ అవసరం",
+    "elevation": "ఎత్తు", "slope": "వాలు", "ndviKey": "Sentinel Hub కీ అవసరం",
     "disclaimer": "నేల SoilGrids నుండి (~250 మీ అంచనా). స్థానిక నేల పరీక్షతో నిర్ధారించండి."
   },
   "recommend": {
@@ -39,7 +39,9 @@
   "layout": {
     "title": "4 · నాటడం మ్యాప్", "totalPlants": "మొత్తం మొక్కలు",
     "showHeatmap": "సాంద్రత హీట్‌మ్యాప్ చూపు", "calendar": "పంట క్యాలెండర్ & సామగ్రి",
-    "seed": "విత్తనం", "downloadPdf": "📄 PDF నివేదిక డౌన్‌లోడ్", "preparing": "సిద్ధమవుతోంది…"
+    "seed": "విత్తనం", "downloadPdf": "📄 PDF నివేదిక డౌన్‌లోడ్", "preparing": "సిద్ధమవుతోంది…",
+    "savePlan": "💾 పొలంలో ప్లాన్ & మ్యాప్ సేవ్", "savePlanDone": "మీ పొలంలో సేవ్ అయింది ✓",
+    "savePlanHint": "ప్లాన్ ఉంచడానికి ముందు ఈ పొలాన్ని సేవ్ చేయండి."
   },
   "profit": {
     "title": "5 · లాభ అంచనా", "inputCost": "మొత్తం ఖర్చు",

@@ -25,7 +25,7 @@
     "title": "2 · भूमि जानकारी",
     "soilTexture": "मिट्टी की बनावट", "soilPh": "मिट्टी pH", "season": "मौसम",
     "rainfall": "वर्षा", "maxTemp": "अधिकतम तापमान", "ndvi": "NDVI (हरियाली)",
-    "ndviKey": "Sentinel Hub कुंजी चाहिए",
+    "elevation": "ऊँचाई", "slope": "ढलान", "ndviKey": "Sentinel Hub कुंजी चाहिए",
     "disclaimer": "मिट्टी SoilGrids से (~250 मी अनुमान)। स्थानीय मिट्टी जाँच से पुष्टि करें।"
   },
   "recommend": {
@@ -39,7 +39,9 @@
   "layout": {
     "title": "4 · रोपाई नक्शा", "totalPlants": "कुल पौधे",
     "showHeatmap": "घनत्व हीटमैप दिखाएँ", "calendar": "फसल कैलेंडर व सामग्री",
-    "seed": "बीज", "downloadPdf": "📄 PDF रिपोर्ट डाउनलोड करें", "preparing": "तैयार हो रहा है…"
+    "seed": "बीज", "downloadPdf": "📄 PDF रिपोर्ट डाउनलोड करें", "preparing": "तैयार हो रहा है…",
+    "savePlan": "💾 खेत में योजना व नक्शा सहेजें", "savePlanDone": "आपके खेत में सहेजा गया ✓",
+    "savePlanHint": "योजना रखने के लिए पहले यह खेत सहेजें।"
   },
   "profit": {
     "title": "5 · लाभ अनुमान", "inputCost": "कुल लागत",

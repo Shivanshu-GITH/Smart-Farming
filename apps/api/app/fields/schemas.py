@@ -51,3 +51,29 @@ class FieldOut(BaseModel):
     area: AreaBreakdown | None = None
     region: Region | None = None
     created_at: str
+
+
+# --- Saved plans & layouts (belong to a field) ---
+
+class PlanCreate(BaseModel):
+    name: str | None = Field(default=None, max_length=160)
+    data: dict
+
+
+class SavedPlanOut(BaseModel):
+    id: str
+    field_id: str
+    name: str | None = None
+    data: dict
+    created_at: str
+
+
+class LayoutCreate(BaseModel):
+    data: dict
+
+
+class SavedLayoutOut(BaseModel):
+    id: str
+    field_id: str
+    data: dict
+    created_at: str

@@ -177,6 +177,16 @@ export const api = {
     get<{ count: number; resources: SchemeResource[] }>(
       `/resources/schemes${state ? `?state=${encodeURIComponent(state)}` : ""}`),
 
+  elevation: (lat: number, lon: number) =>
+    get<{ elevation_m?: number; slope_pct?: number; slope_class?: string; aspect?: string; error?: string }>(
+      `/land-intel/elevation?lat=${lat}&lon=${lon}`),
+
+  savePlan: (fieldId: string, name: string | null, data: unknown) =>
+    post<{ id: string }>(`/fields/${fieldId}/plans`, { name, data }, true),
+
+  saveLayout: (fieldId: string, data: unknown) =>
+    post<{ id: string }>(`/fields/${fieldId}/layouts`, { data }, true),
+
   reportPdf: async (geometry: Geometry, crop_ids: string[]): Promise<Blob> => {
     const res = await fetch(`${BASE}/reports/pdf`, {
       method: "POST",

@@ -41,6 +41,7 @@ export default function Planner() {
   const [summary, setSummary] = useState<FieldSummary | null>(null);
   const [land, setLand] = useState<any>(null);
   const [ndvi, setNdvi] = useState<any>(null);
+  const [elevation, setElevation] = useState<any>(null);
   const [ndviSeries, setNdviSeries] = useState<{ date: string; mean: number }[]>([]);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -82,6 +83,8 @@ export default function Planner() {
   const [fieldName, setFieldName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [savedFieldId, setSavedFieldId] = useState<string | null>(null);
+  const [planSaved, setPlanSaved] = useState(false);
 
   // Load the user's saved fields whenever they sign in (clear on sign-out).
   useEffect(() => {
@@ -150,6 +153,7 @@ export default function Planner() {
     drawingRef.current = true;
     setDrawing(true);
     setGeometry(null); setSummary(null); setLand(null); setNdvi(null); setNdviSeries([]);
+    setElevation(null); setSavedFieldId(null); setPlanSaved(false);
     setRecs([]); setSelected([]); setLayout(null);
     setValidation(null); setDesign(null); setPlans([]); setEconomics(null);
     if (map.current) {
@@ -186,7 +190,7 @@ export default function Planner() {
       (map.current.getSource("heat") as any)?.setData(emptyFC());
       if (opts.fit) fitToRing(map.current, geom.coordinates[0]);
     }
-    setLayout(null); setSelected([]);
+    setLayout(null); setSelected([]); setPlanSaved(false);
     await analyze(geom);
   }
 
@@ -198,6 +202,7 @@ export default function Planner() {
         summary?.region?.village || summary?.region?.district || "My field";
       const saved = await api.createField(name, geometry);
       setSavedFields((cur) => [saved, ...cur]);
+      setSavedFieldId(saved.id);
       setSaveMsg(`Saved “${saved.name}”.`);
       setFieldName("");
     } catch {
@@ -212,6 +217,18 @@ export default function Planner() {
     drawingRef.current = false;
     setDrawing(false);
     await applyGeometry(f.geometry, { fit: true });
+    setSavedFieldId(f.id);     // subsequent plans/layouts attach to this field
+  }
+
+  async function savePlanAndLayout() {
+    if (!savedFieldId || !layout) return;
+    try {
+      await api.saveLayout(savedFieldId, layout);
+      if (plans.length) await api.savePlan(savedFieldId, null, { plans, economics });
+      setPlanSaved(true);
+    } catch {
+      /* ignore — surfaced via button state */
+    }
   }
 
   async function deleteSavedField(id: string) {
@@ -228,6 +245,7 @@ export default function Planner() {
       setBusy("Computing area & region…");
       const s = await api.fieldSummary(geom);
       setSummary(s);
+      api.elevation(s.centroid.lat, s.centroid.lon).then(setElevation).catch(() => setElevation(null));
       setBusy("Fetching soil & climate…");
       const report = await api.landReport(s.centroid.lat, s.centroid.lon).catch(() => null);
       setLand(report);
@@ -412,6 +430,12 @@ export default function Planner() {
               <span className="v">{land.climate?.annual_rainfall_mm ?? "—"} mm ({land.climate?.rainfall_band || "—"})</span></div>
             <div className="kv"><span className="k">{t("intel.maxTemp")}</span>
               <span className="v">{land.climate?.temp_max_avg_c ?? "—"} °C</span></div>
+            {elevation?.elevation_m != null && (
+              <div className="kv"><span className="k">{t("intel.elevation")}</span>
+                <span className="v">{elevation.elevation_m} m
+                  {elevation.slope_class ? ` · ${t("intel.slope")} ${elevation.slope_class}` : ""}
+                  {elevation.aspect ? ` (${elevation.aspect})` : ""}</span></div>
+            )}
             {ndvi?.mean != null && (
               <div className="kv"><span className="k">{t("intel.ndvi")}</span>
                 <span className="v">{ndvi.mean} · {ndvi.vigour || "—"}</span></div>
@@ -569,6 +593,14 @@ export default function Planner() {
               disabled={pdfBusy} onClick={downloadPdf}>
               {pdfBusy ? t("layout.preparing") : t("layout.downloadPdf")}
             </button>
+            {user && (savedFieldId ? (
+              <button className="btn" style={{ marginTop: 8, width: "100%" }}
+                disabled={planSaved} onClick={savePlanAndLayout}>
+                {planSaved ? t("layout.savePlanDone") : t("layout.savePlan")}
+              </button>
+            ) : (
+              <p className="hint" style={{ marginTop: 8 }}>{t("layout.savePlanHint")}</p>
+            ))}
           </div>
         )}
 

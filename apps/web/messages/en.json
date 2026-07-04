@@ -25,7 +25,7 @@
     "title": "2 · Land intelligence",
     "soilTexture": "Soil texture", "soilPh": "Soil pH", "season": "Season",
     "rainfall": "Rainfall", "maxTemp": "Max temp", "ndvi": "NDVI (vigour)",
-    "ndviKey": "needs Sentinel Hub key",
+    "elevation": "Elevation", "slope": "Slope", "ndviKey": "needs Sentinel Hub key",
     "disclaimer": "Soil from SoilGrids (~250 m estimate). Verify with a local soil test."
   },
   "recommend": {
@@ -39,7 +39,9 @@
   "layout": {
     "title": "4 · Planting layout", "totalPlants": "Total plants",
     "showHeatmap": "Show density heatmap", "calendar": "Crop calendar & inputs",
-    "seed": "seed", "downloadPdf": "📄 Download PDF report", "preparing": "Preparing…"
+    "seed": "seed", "downloadPdf": "📄 Download PDF report", "preparing": "Preparing…",
+    "savePlan": "💾 Save plan & layout to field", "savePlanDone": "Saved to your field ✓",
+    "savePlanHint": "Save this field first to keep its plan."
   },
   "profit": {
     "title": "5 · Profit estimate", "inputCost": "Total input cost",

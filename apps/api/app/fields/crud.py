@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.geo import area_breakdown, polygon_from_geojson
-from app.db.models import Field
+from app.db.models import Field, Layout, Plan
 from app.fields.service import reverse_geocode
 
 
@@ -68,3 +68,81 @@ def to_out(field: Field) -> dict:
         "region": field.region,
         "created_at": field.created_at.isoformat() if field.created_at else "",
     }
+
+
+# --- Saved plans (owner-scoped via the parent field) ---
+
+async def save_plan(session: AsyncSession, owner_id: str, field_id: str,
+                    name: str | None, data: dict) -> Plan | None:
+    if await get_field(session, owner_id, field_id) is None:
+        return None
+    plan = Plan(field_id=field_id, name=name, data=data)
+    session.add(plan)
+    await session.commit()
+    await session.refresh(plan)
+    return plan
+
+
+async def list_plans(session: AsyncSession, owner_id: str,
+                     field_id: str) -> list[Plan] | None:
+    if await get_field(session, owner_id, field_id) is None:
+        return None
+    result = await session.execute(
+        select(Plan).where(Plan.field_id == field_id).order_by(Plan.created_at.desc()))
+    return list(result.scalars().all())
+
+
+async def delete_plan(session: AsyncSession, owner_id: str, field_id: str,
+                      plan_id: str) -> bool:
+    if await get_field(session, owner_id, field_id) is None:
+        return False
+    plan = await session.get(Plan, plan_id)
+    if plan is None or plan.field_id != field_id:
+        return False
+    await session.delete(plan)
+    await session.commit()
+    return True
+
+
+def plan_out(p: Plan) -> dict:
+    return {"id": p.id, "field_id": p.field_id, "name": p.name, "data": p.data,
+            "created_at": p.created_at.isoformat() if p.created_at else ""}
+
+
+# --- Saved layouts (owner-scoped via the parent field) ---
+
+async def save_layout(session: AsyncSession, owner_id: str, field_id: str,
+                      data: dict) -> Layout | None:
+    if await get_field(session, owner_id, field_id) is None:
+        return None
+    layout = Layout(field_id=field_id, data=data)
+    session.add(layout)
+    await session.commit()
+    await session.refresh(layout)
+    return layout
+
+
+async def list_layouts(session: AsyncSession, owner_id: str,
+                       field_id: str) -> list[Layout] | None:
+    if await get_field(session, owner_id, field_id) is None:
+        return None
+    result = await session.execute(
+        select(Layout).where(Layout.field_id == field_id).order_by(Layout.created_at.desc()))
+    return list(result.scalars().all())
+
+
+async def delete_layout(session: AsyncSession, owner_id: str, field_id: str,
+                        layout_id: str) -> bool:
+    if await get_field(session, owner_id, field_id) is None:
+        return False
+    layout = await session.get(Layout, layout_id)
+    if layout is None or layout.field_id != field_id:
+        return False
+    await session.delete(layout)
+    await session.commit()
+    return True
+
+
+def layout_out(L: Layout) -> dict:
+    return {"id": L.id, "field_id": L.field_id, "data": L.data,
+            "created_at": L.created_at.isoformat() if L.created_at else ""}

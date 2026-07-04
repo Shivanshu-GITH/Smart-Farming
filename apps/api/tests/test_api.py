@@ -94,3 +94,15 @@ def test_diagnose_requires_key():
     r = client.post("/advisory/diagnose",
                     json={"image_base64": "aaaaaaaaaaaaaaaa", "media_type": "image/png"})
     assert r.status_code == 503
+
+
+def test_saved_plans_and_layouts_require_auth():
+    assert client.post("/fields/x/plans", json={"data": {}}).status_code == 403
+    assert client.get("/fields/x/plans").status_code == 403
+    assert client.post("/fields/x/layouts", json={"data": {}}).status_code == 403
+    assert client.get("/fields/x/layouts").status_code == 403
+
+
+def test_elevation_route_registered():
+    # network-free assertion: the route exists and validates its query params
+    assert client.get("/land-intel/elevation").status_code == 422  # missing lat/lon
