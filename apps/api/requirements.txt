@@ -7,10 +7,11 @@ shapely==2.0.6
 pyproj==3.7.0
 python-dotenv==1.0.1
 
-# Persistence + auth (Stage 1). The API still boots without a DB configured;
-# these are only exercised when DATABASE_URL is set.
+# Persistence + auth (Stage 1). Default is zero-config SQLite (aiosqlite);
+# Postgres (psycopg) is used in production. Field geometry is stored as GeoJSON,
+# so PostGIS is not required.
 sqlalchemy[asyncio]==2.0.36
-geoalchemy2==0.16.0
+aiosqlite==0.20.0
 psycopg[binary]==3.2.3
 alembic==1.14.0
 pyjwt==2.10.1

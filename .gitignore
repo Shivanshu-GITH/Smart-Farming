@@ -31,3 +31,8 @@ Thumbs.db
 *.log
 .cache/
 data/cache/
+
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite3

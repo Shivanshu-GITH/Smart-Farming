@@ -1,18 +1,16 @@
 """ORM models for SmartFarm persistence.
 
-All models live here so Alembic autogenerate has a single import point. Field
-geometry is stored natively in PostGIS (SRID 4326 polygon); everything else that
-is provider-shaped (region, soil/climate reports, plan JSON, layout points) is
-kept as JSONB so the curated-knowledge-base shape can evolve without migrations.
+Portable across SQLite (zero-config dev) and Postgres (prod): field geometry is
+stored as GeoJSON in a JSON column (we clip/measure in-memory with shapely, not
+in the DB), and all provider-shaped blobs use the generic JSON type. Users can
+authenticate by phone (OTP) or email+password.
 """
 from __future__ import annotations
 
 import datetime as dt
 import uuid
 
-from geoalchemy2 import Geometry
-from sqlalchemy import DateTime, Float, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -30,7 +28,12 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    # A user has at least one of phone / email (both unique when present).
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True, index=True,
+                                              nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True,
+                                              nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[dt.datetime] = _now_col()
 
@@ -47,9 +50,9 @@ class Field(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(160))
-    geom = mapped_column(Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
+    geometry: Mapped[dict] = mapped_column(JSON)  # GeoJSON Polygon
     area_m2: Mapped[float | None] = mapped_column(Float, nullable=True)
-    region: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    region: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[dt.datetime] = _now_col()
 
     owner: Mapped[User] = relationship(back_populates="fields")
@@ -65,7 +68,7 @@ class Field(Base):
 
 
 class LandReport(Base):
-    """Cached soil + climate (+ later NDVI) snapshot for a field."""
+    """Cached soil + climate (+ NDVI) snapshot for a field."""
 
     __tablename__ = "land_reports"
 
@@ -73,7 +76,7 @@ class LandReport(Base):
     field_id: Mapped[str] = mapped_column(
         ForeignKey("fields.id", ondelete="CASCADE"), index=True
     )
-    data: Mapped[dict] = mapped_column(JSONB)
+    data: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[dt.datetime] = _now_col()
 
     field: Mapped[Field] = relationship(back_populates="reports")
@@ -89,7 +92,7 @@ class Plan(Base):
         ForeignKey("fields.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str | None] = mapped_column(String(160), nullable=True)
-    data: Mapped[dict] = mapped_column(JSONB)
+    data: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[dt.datetime] = _now_col()
 
     field: Mapped[Field] = relationship(back_populates="plans")
@@ -104,7 +107,7 @@ class Layout(Base):
     field_id: Mapped[str] = mapped_column(
         ForeignKey("fields.id", ondelete="CASCADE"), index=True
     )
-    data: Mapped[dict] = mapped_column(JSONB)
+    data: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[dt.datetime] = _now_col()
 
     field: Mapped[Field] = relationship(back_populates="layouts")

@@ -9,7 +9,13 @@
     "verify": "Verify & sign in", "verifying": "Verifying…",
     "changeNumber": "← Change number", "devCode": "Dev mode — your code is",
     "sendError": "Could not send code. Is the API running?",
-    "codeError": "Invalid or expired code."
+    "codeError": "Invalid or expired code.",
+    "tabEmail": "Email", "tabPhone": "Phone",
+    "email": "Email", "password": "Password", "name": "Name (optional)",
+    "register": "Create account", "loginBtn": "Log in",
+    "toggleToLogin": "Have an account? Log in",
+    "toggleToRegister": "New here? Create an account",
+    "emailError": "Sign-in failed. Check your details and try again."
   },
   "land": {
     "title": "1 · Your land",

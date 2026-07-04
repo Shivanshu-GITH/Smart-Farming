@@ -117,7 +117,7 @@ export interface EconomicsResult {
 }
 
 export interface User {
-  id: string; phone: string; name?: string | null;
+  id: string; phone?: string | null; email?: string | null; name?: string | null;
 }
 
 export interface SavedField {
@@ -204,6 +204,14 @@ export const api = {
   verifyOtp: (phone: string, code: string) =>
     post<{ access_token: string; token_type: string; user: User }>(
       "/auth/otp/verify", { phone, code }),
+
+  register: (email: string, password: string, name?: string) =>
+    post<{ access_token: string; token_type: string; user: User }>(
+      "/auth/register", { email, password, name }),
+
+  login: (email: string, password: string) =>
+    post<{ access_token: string; token_type: string; user: User }>(
+      "/auth/login", { email, password }),
 
   me: () => get<User>("/auth/me", true),
 

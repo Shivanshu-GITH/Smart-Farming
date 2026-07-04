@@ -8,19 +8,62 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import otp
 from app.auth.deps import get_current_user
 from app.auth.schemas import (
+    LoginRequest,
     OtpRequest,
     OtpRequestResponse,
     OtpVerify,
+    RegisterRequest,
     TokenResponse,
     UserOut,
 )
-from app.auth.security import create_access_token
-from app.auth.service import get_or_create_user
+from app.auth.security import (
+    create_access_token,
+    hash_password,
+    verify_password,
+)
+from app.auth.service import (
+    create_email_user,
+    get_or_create_user,
+    get_user_by_email,
+)
 from app.core.config import get_settings
 from app.core.db import get_session
 from app.db.models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _user_out(user: User) -> UserOut:
+    return UserOut(id=user.id, phone=user.phone, email=user.email, name=user.name)
+
+
+def _token_response(user: User) -> TokenResponse:
+    return TokenResponse(access_token=create_access_token(user.id), user=_user_out(user))
+
+
+# --- Email + password ---
+
+@router.post("/register", response_model=TokenResponse, status_code=201)
+async def register(
+    req: RegisterRequest, session: AsyncSession = Depends(get_session)
+) -> TokenResponse:
+    """Create an account with email + password and return a session token."""
+    email = req.email.strip().lower()
+    if await get_user_by_email(session, email) is not None:
+        raise HTTPException(status_code=409, detail="Email already registered")
+    user = await create_email_user(session, email, hash_password(req.password), req.name)
+    return _token_response(user)
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(
+    req: LoginRequest, session: AsyncSession = Depends(get_session)
+) -> TokenResponse:
+    """Log in with email + password."""
+    user = await get_user_by_email(session, req.email.strip().lower())
+    if user is None or not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return _token_response(user)
 
 
 @router.post("/otp/request", response_model=OtpRequestResponse)
@@ -43,16 +86,12 @@ async def verify_otp(
     if not await otp.verify_otp(req.phone, req.code):
         raise HTTPException(status_code=401, detail="Invalid or expired code")
     user = await get_or_create_user(session, req.phone)
-    token = create_access_token(user.id)
-    return TokenResponse(
-        access_token=token,
-        user=UserOut(id=user.id, phone=user.phone, name=user.name),
-    )
+    return _token_response(user)
 
 
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
-    return UserOut(id=user.id, phone=user.phone, name=user.name)
+    return _user_out(user)
 
 
 class SsoRequest(BaseModel):
@@ -83,8 +122,4 @@ async def sso(req: SsoRequest, session: AsyncSession = Depends(get_session)) -> 
     if claims.get("name") and not user.name:
         user.name = claims["name"]
         await session.commit()
-    token = create_access_token(user.id)
-    return TokenResponse(
-        access_token=token,
-        user=UserOut(id=user.id, phone=user.phone, name=user.name),
-    )
+    return _token_response(user)

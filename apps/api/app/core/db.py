@@ -1,8 +1,11 @@
-"""Async database layer (Postgres + PostGIS).
+"""Async database layer.
 
-The engine is created lazily on first use so the API keeps booting in stateless
-mode when ``DATABASE_URL`` is empty. Any route that needs persistence depends on
-``get_session`` — which raises 503 (not 500) when no database is configured.
+Portable across SQLite (zero-config dev — the default in .env is a local file)
+and Postgres (prod). The engine is created lazily so the API keeps booting in
+stateless mode when ``DATABASE_URL`` is empty; any route that needs persistence
+depends on ``get_session``, which raises 503 (not 500) when no DB is configured.
+On startup we create tables for SQLite so login/persistence work out of the box;
+Postgres uses Alembic migrations.
 """
 from __future__ import annotations
 
@@ -41,6 +44,20 @@ def _ensure_engine() -> None:
         return
     _engine = create_async_engine(settings.database_url, pool_pre_ping=True, future=True)
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
+
+
+async def init_db() -> None:
+    """Create tables when using SQLite (dev). No-op without a DB; Postgres uses
+    Alembic. Safe to call on every startup — create_all only adds missing tables.
+    """
+    _ensure_engine()
+    if _engine is None:
+        return
+    import app.db.models  # noqa: F401 - register tables on Base.metadata
+
+    if _engine.url.get_backend_name() == "sqlite":
+        async with _engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

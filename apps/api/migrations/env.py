@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-import geoalchemy2  # noqa: F401  (registers spatial types for autogenerate)
 from alembic import context
 from sqlalchemy import create_engine, pool
 
