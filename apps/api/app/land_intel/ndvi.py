@@ -18,14 +18,24 @@ from app.core import cache
 from app.core.config import get_settings
 from app.core.geo import centroid_latlon, polygon_from_geojson
 
+_CDSE_TOKEN_URL = ("https://identity.dataspace.copernicus.eu/auth/realms/"
+                   "CDSE/protocol/openid-connect/token")
+
+
 def _sh_urls() -> tuple[str, str]:
     """(oauth token url, statistics url) for the configured Sentinel Hub base.
 
-    Works for both the commercial host and the free Copernicus Data Space host,
-    which share the same path structure under different domains.
+    The Statistical API path is the same across hosts, but Copernicus Data Space
+    (the free tier) issues OAuth tokens from a separate identity server, so the
+    token URL is auto-selected (and can be overridden via SENTINELHUB_TOKEN_URL).
     """
-    base = get_settings().sentinelhub_base_url.rstrip("/")
-    return f"{base}/oauth/token", f"{base}/api/v1/statistics"
+    settings = get_settings()
+    base = settings.sentinelhub_base_url.rstrip("/")
+    token_url = settings.sentinelhub_token_url.strip()
+    if not token_url:
+        token_url = (_CDSE_TOKEN_URL if "dataspace.copernicus.eu" in base
+                     else f"{base}/oauth/token")
+    return token_url, f"{base}/api/v1/statistics"
 
 _EVALSCRIPT = """//VERSION=3
 function setup() {
@@ -221,7 +231,8 @@ async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
     for item in data.get("data", []):
         stats = item.get("outputs", {}).get("ndvi", {}).get("bands", {}).get("B0", {}).get("stats", {})
         mean = stats.get("mean")
-        if mean is not None and stats.get("sampleCount", 1) != 0:
+        # cloudy/no-data intervals report a non-numeric mean (e.g. "NaN") — skip
+        if isinstance(mean, (int, float)) and stats.get("sampleCount", 1) != 0:
             series.append({"date": item.get("interval", {}).get("from", "")[:10],
                            "mean": round(mean, 3)})
     result["series"] = series
@@ -237,7 +248,7 @@ def _latest_valid(intervals: list) -> tuple[str, dict] | None:
         outputs = item.get("outputs", {}).get("ndvi", {})
         bands = outputs.get("bands", {})
         stats = bands.get("B0", {}).get("stats", {})
-        # sampleCount==0 or all-nodata intervals report no usable mean
-        if stats.get("mean") is not None and stats.get("sampleCount", 1) != 0:
+        # sampleCount==0 or all-nodata intervals report a non-numeric mean
+        if isinstance(stats.get("mean"), (int, float)) and stats.get("sampleCount", 1) != 0:
             return item.get("interval", {}).get("from", "")[:10], stats
     return None

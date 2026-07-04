@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # FREE Copernicus Data Space tier set:
     #   https://sh.dataspace.copernicus.eu
     sentinelhub_base_url: str = "https://services.sentinel-hub.com"
+    # OAuth token endpoint. Empty = auto: Copernicus Data Space uses its identity
+    # server, the commercial host uses {base}/oauth/token.
+    sentinelhub_token_url: str = ""
     # data.gov.in API key for live Agmarknet mandi prices (optional).
     data_gov_api_key: str = ""
     anthropic_api_key: str = ""
