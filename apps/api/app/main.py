@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.admin.router import router as admin_router
 from app.advisory.router import router as advisory_router
 from app.agronomy.router import router as agronomy_router
 from app.auth.router import router as auth_router
@@ -14,6 +15,7 @@ from app.fields.router import router as fields_router
 from app.land_intel.router import router as land_intel_router
 from app.layout.router import router as layout_router
 from app.reports.router import router as reports_router
+from app.resources.router import router as resources_router
 
 settings = get_settings()
 
@@ -56,3 +58,5 @@ app.include_router(layout_router)
 app.include_router(reports_router)
 app.include_router(advisory_router)
 app.include_router(economics_router)
+app.include_router(resources_router)
+app.include_router(admin_router)

@@ -40,6 +40,56 @@ def advisory_available() -> bool:
     return bool(get_settings().anthropic_api_key)
 
 
+DIAGNOSE_PROMPT = """You are a plant pathologist and pest specialist for Indian farms.
+
+A farmer has sent a photo of a crop (leaf/stem/fruit). Identify the most likely
+problem and advise:
+- Likely pest/disease (name + confidence in plain words). If the image is unclear
+  or healthy, say so — do not invent a diagnosis.
+- Key symptoms you can see in the photo.
+- Organic/cultural control first, then chemical control with typical Indian product
+  names and dosages ONLY as a rough guide.
+- Prevention for next season.
+
+Reply in the farmer's language if their note is in one. Be concise and practical.
+Always end by advising confirmation with a local agri-extension officer before
+spraying any chemical — a photo can mislead."""
+
+_ALLOWED_MEDIA = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+async def diagnose(image_b64: str, media_type: str,
+                   note: str | None = None, context: dict | None = None) -> str:
+    """Vision diagnosis of a crop photo (pest/disease ID)."""
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise RuntimeError("Advisory is not configured (set ANTHROPIC_API_KEY).")
+    if media_type not in _ALLOWED_MEDIA:
+        raise ValueError(f"Unsupported image type '{media_type}'")
+
+    from anthropic import AsyncAnthropic
+
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    text = note.strip() if note else "What is wrong with this crop, and what should I do?"
+    if context:
+        text += "\n\nField context (JSON): " + json.dumps(context, ensure_ascii=False)[:1500]
+
+    response = await client.messages.create(
+        model=settings.advisory_model,
+        max_tokens=1024,
+        system=DIAGNOSE_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {
+                    "type": "base64", "media_type": media_type, "data": image_b64}},
+                {"type": "text", "text": text},
+            ],
+        }],
+    )
+    return "".join(b.text for b in response.content if b.type == "text")
+
+
 async def chat(messages: list[dict], context: dict | None = None) -> str:
     """Run one advisory turn. `messages` is the running [{role, content}] history."""
     settings = get_settings()

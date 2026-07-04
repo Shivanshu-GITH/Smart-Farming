@@ -46,9 +46,14 @@
     "revenue": "Est. revenue", "netProfit": "Net profit / season",
     "multiLayer": "{n} layers on the same land — multi-layer stacks lift revenue per acre while sharing land cost."
   },
+  "schemes": { "title": "🏛️ Schemes & help" },
+  "monitor": {
+    "title": "NDVI trend (6 mo)", "improving": "improving ↑", "declining": "declining ↓"
+  },
   "chat": {
     "ask": "🌾 Ask advisor", "title": "Crop advisor",
     "placeholder": "Ask about your field…", "send": "Send",
+    "photo": "📷 Diagnose photo", "diagnosing": "Analysing photo…", "photoSent": "📷 (crop photo)",
     "greeting": "Namaste! 🌱 Ask me about crops for your field, spacing, fertiliser, multi-layer planting, or pests.",
     "notConfigured": "The AI advisor isn’t configured on this server yet (needs an Anthropic API key). You can still use the crop recommendations and layer designer.",
     "thinking": "…thinking",

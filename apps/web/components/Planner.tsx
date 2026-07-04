@@ -6,6 +6,7 @@ import maplibregl from "maplibre-gl";
 import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import AdvisoryChat from "@/components/AdvisoryChat";
+import SchemesCard from "@/components/SchemesCard";
 
 const LAYER_COLORS: Record<string, string> = {
   underground: "#b5651d",
@@ -40,6 +41,7 @@ export default function Planner() {
   const [summary, setSummary] = useState<FieldSummary | null>(null);
   const [land, setLand] = useState<any>(null);
   const [ndvi, setNdvi] = useState<any>(null);
+  const [ndviSeries, setNdviSeries] = useState<{ date: string; mean: number }[]>([]);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -147,7 +149,7 @@ export default function Planner() {
     vertsRef.current = [];
     drawingRef.current = true;
     setDrawing(true);
-    setGeometry(null); setSummary(null); setLand(null); setNdvi(null);
+    setGeometry(null); setSummary(null); setLand(null); setNdvi(null); setNdviSeries([]);
     setRecs([]); setSelected([]); setLayout(null);
     setValidation(null); setDesign(null); setPlans([]); setEconomics(null);
     if (map.current) {
@@ -231,6 +233,7 @@ export default function Planner() {
       setLand(report);
       // NDVI needs the polygon; fetch in the background (may be unconfigured).
       api.ndvi(geom).then(setNdvi).catch(() => setNdvi(null));
+      api.ndviSeries(geom).then((r) => setNdviSeries(r.series || [])).catch(() => setNdviSeries([]));
       setBusy("Recommending crops…");
       const recRes = await api.recommend({
         ph: report?.soil?.ph ?? undefined,
@@ -418,6 +421,16 @@ export default function Planner() {
                 <span className="v" style={{ color: "var(--muted)", fontWeight: 400 }}>
                   {t("intel.ndviKey")}</span></div>
             )}
+            {ndviSeries.length >= 2 && (
+              <div className="kv" style={{ alignItems: "center" }}>
+                <span className="k">{t("monitor.title")}</span>
+                <span className="v">
+                  {sparkline(ndviSeries.map((p) => p.mean))}{" "}
+                  {ndviSeries[ndviSeries.length - 1].mean >= ndviSeries[0].mean
+                    ? t("monitor.improving") : t("monitor.declining")}
+                </span>
+              </div>
+            )}
             <p className="disclaimer">{t("intel.disclaimer")}</p>
           </div>
         )}
@@ -593,6 +606,8 @@ export default function Planner() {
         {!geometry && !drawing && (
           <p className="empty">{t("land.empty")}</p>
         )}
+
+        <SchemesCard state={summary?.region?.state} />
       </aside>
       <AdvisoryChat context={{
         area: summary?.area, region: summary?.region,
@@ -601,6 +616,22 @@ export default function Planner() {
         selected_crops: selected,
       }} />
     </div>
+  );
+}
+
+function sparkline(values: number[]): React.ReactNode {
+  const w = 70, h = 18, pad = 2;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+    const y = h - pad - ((v - min) / span) * (h - 2 * pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg width={w} height={h} style={{ verticalAlign: "middle" }}>
+      <polyline points={pts} fill="none" stroke="#6fe39a" strokeWidth="1.5" />
+    </svg>
   );
 }
 

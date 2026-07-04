@@ -11,6 +11,7 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const t = useTranslations("chat");
 
   useEffect(() => {
@@ -35,6 +36,26 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
       setMessages([...next, { role: "assistant", content: reply }]);
     } catch {
       setMessages([...next, { role: "assistant", content: t("error") }]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function diagnosePhoto(file: File) {
+    setBusy(true);
+    setMessages((m) => [...m, { role: "user", content: t("photoSent") }]);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+      const { reply } = await api.diagnose(dataUrl, file.type || "image/jpeg", input.trim() || undefined, context);
+      setMessages((m) => [...m, { role: "assistant", content: reply }]);
+      setInput("");
+    } catch {
+      setMessages((m) => [...m, { role: "assistant", content: t("error") }]);
     } finally {
       setBusy(false);
     }
@@ -69,8 +90,13 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") send(); }}
             />
+            <button className="icon-btn" title={t("photo")}
+              disabled={busy || configured === false}
+              onClick={() => fileRef.current?.click()}>📷</button>
             <button className="btn btn-sm" disabled={busy || configured === false}
               onClick={send}>{t("send")}</button>
+            <input ref={fileRef} type="file" accept="image/*" hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) diagnosePhoto(f); e.target.value = ""; }} />
           </div>
         </div>
       )}

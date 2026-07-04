@@ -157,6 +157,74 @@ async def get_ndvi(geometry: dict) -> dict:
     return result
 
 
+async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
+    """NDVI trend over the last `months` (one point per ~15-day Sentinel-2 bucket).
+
+    Enables time-series field monitoring — spotting decline/stress over a season.
+    """
+    settings = get_settings()
+    polygon = polygon_from_geojson(geometry)
+    lat, lon = centroid_latlon(polygon)
+    months = max(1, min(months, 12))
+
+    result: dict = {"source": "Sentinel-2 L2A (Sentinel Hub)", "estimate": True,
+                    "configured": bool(settings.sentinelhub_client_id
+                                       and settings.sentinelhub_client_secret),
+                    "series": []}
+    if not result["configured"]:
+        result["note"] = "NDVI needs Sentinel Hub credentials."
+        return result
+
+    key = f"{cache.geo_key('ndvi-series', lat, lon, precision=3)}:{months}:{dt.date.today():%Y-%m}"
+    cached = await cache.get(key)
+    if cached is not None:
+        return cached
+
+    end = dt.date.today()
+    start = end - dt.timedelta(days=months * 30)
+    body = {
+        "input": {
+            "bounds": {"geometry": geometry,
+                       "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"}},
+            "data": [{"type": "sentinel-2-l2a", "dataFilter": {"maxCloudCoverage": 40}}],
+        },
+        "aggregation": {
+            "timeRange": {"from": f"{start.isoformat()}T00:00:00Z",
+                          "to": f"{end.isoformat()}T23:59:59Z"},
+            "aggregationInterval": {"of": "P15D"},
+            "evalscript": _EVALSCRIPT, "resx": 10, "resy": 10,
+        },
+        "calculations": {"ndvi": {"statistics": {"default": {}}}},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            token = await _get_token(client, settings.sentinelhub_client_id,
+                                     settings.sentinelhub_client_secret)
+            if not token:
+                result["error"] = "Could not authenticate with Sentinel Hub"
+                return result
+            resp = await client.post(STATS_URL, json=body,
+                                     headers={"Authorization": f"Bearer {token}"})
+            resp.raise_for_status()
+            data = resp.json()
+    except (httpx.HTTPError, ValueError, KeyError):
+        result["error"] = "NDVI service unavailable; try again shortly"
+        return result
+
+    series = []
+    for item in data.get("data", []):
+        stats = item.get("outputs", {}).get("ndvi", {}).get("bands", {}).get("B0", {}).get("stats", {})
+        mean = stats.get("mean")
+        if mean is not None and stats.get("sampleCount", 1) != 0:
+            series.append({"date": item.get("interval", {}).get("from", "")[:10],
+                           "mean": round(mean, 3)})
+    result["series"] = series
+    if len(series) >= 2:
+        result["trend"] = "improving" if series[-1]["mean"] > series[0]["mean"] else "declining"
+    await cache.set(key, result, ttl_seconds=3 * 86_400)
+    return result
+
+
 def _latest_valid(intervals: list) -> tuple[str, dict] | None:
     """Pick the most recent interval that has valid NDVI stats."""
     for item in reversed(intervals):

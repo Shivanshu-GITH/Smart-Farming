@@ -98,6 +98,11 @@ export interface PlanResult {
 
 export interface ChatMessage { role: "user" | "assistant"; content: string; }
 
+export interface SchemeResource {
+  id: string; name: string; category: string; audience: string;
+  description: string; url: string;
+}
+
 export interface EconCrop {
   crop_id: string; name: string; layer: string;
   cost: { seed: number; inputs: number; labour: number; total: number };
@@ -160,6 +165,17 @@ export const api = {
 
   economics: (crop_ids: string[], area_m2: number, state?: string) =>
     post<EconomicsResult>("/economics/estimate", { crop_ids, area_m2, state }),
+
+  diagnose: (image_base64: string, media_type: string, note?: string, context?: unknown) =>
+    post<{ reply: string }>("/advisory/diagnose", { image_base64, media_type, note, context }),
+
+  ndviSeries: (geometry: Geometry, months = 6) =>
+    post<{ configured: boolean; series: { date: string; mean: number }[]; trend?: string }>(
+      "/land-intel/ndvi-series", { geometry, months }),
+
+  schemes: (state?: string) =>
+    get<{ count: number; resources: SchemeResource[] }>(
+      `/resources/schemes${state ? `?state=${encodeURIComponent(state)}` : ""}`),
 
   reportPdf: async (geometry: Geometry, crop_ids: string[]): Promise<Blob> => {
     const res = await fetch(`${BASE}/reports/pdf`, {

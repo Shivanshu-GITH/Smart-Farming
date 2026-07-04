@@ -67,3 +67,30 @@ def test_protected_route_without_token_is_403():
 def test_otp_request_returns_dev_code():
     body = client.post("/auth/otp/request", json={"phone": "+919000000009"}).json()
     assert body["sent"] and body["dev_code"]
+
+
+def test_schemes_national_and_state_filter():
+    national = client.get("/resources/schemes").json()
+    assert national["count"] >= 8
+    ap = client.get("/resources/schemes", params={"state": "Andhra Pradesh"}).json()
+    ids = {r["id"] for r in ap["resources"]}
+    assert "ap-rythu-bharosa" in ids  # state entry
+    assert "pm-kisan" in ids          # national entries still included
+
+
+def test_ndvi_series_graceful_without_credentials():
+    r = client.post("/land-intel/ndvi-series", json={
+        "geometry": {"type": "Polygon", "coordinates": [[[80.6, 16.5], [80.61, 16.5],
+                     [80.61, 16.51], [80.6, 16.51], [80.6, 16.5]]]}})
+    assert r.status_code == 200 and r.json()["configured"] is False
+
+
+def test_admin_and_sso_disabled_by_default():
+    assert client.get("/admin/stats").status_code == 503
+    assert client.post("/auth/sso", json={"token": "x"}).status_code == 503
+
+
+def test_diagnose_requires_key():
+    r = client.post("/advisory/diagnose",
+                    json={"image_base64": "aaaaaaaaaaaaaaaa", "media_type": "image/png"})
+    assert r.status_code == 503

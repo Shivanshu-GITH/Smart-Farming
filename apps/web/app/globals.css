@@ -200,3 +200,11 @@ html, body {
 .total-row { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
 .tag { font-size: 9px; background: #17341f; color: #6fe39a; border-radius: 4px;
   padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+
+/* --- schemes / resources --- */
+.scheme { display: block; padding: 8px 0; border-bottom: 1px solid var(--border);
+  text-decoration: none; }
+.scheme:last-child { border-bottom: none; }
+.scheme-name { font-size: 13px; font-weight: 600; color: var(--green); }
+.scheme:hover .scheme-name { text-decoration: underline; }
+.scheme-desc { font-size: 11px; color: var(--muted); line-height: 1.4; margin-top: 2px; }

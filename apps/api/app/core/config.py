@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # In dev (no SMS gateway) the requested OTP is returned in the API response
     # and logged, so you can sign in without a phone. NEVER enable in production.
     otp_dev_mode: bool = True
+    # Admin analytics endpoint gate (empty disables /admin/*).
+    admin_token: str = ""
+    # Shared secret for SSO tokens issued by the Kadapala Groups site (empty
+    # disables /auth/sso). Kadapala signs a short JWT with this secret; we verify
+    # it and mint our own session. See project integration notes.
+    kadapala_sso_secret: str = ""
 
     # CORS
     cors_origins: str = "http://localhost:3000"

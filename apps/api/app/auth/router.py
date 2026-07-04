@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import otp
@@ -51,3 +53,38 @@ async def verify_otp(
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut(id=user.id, phone=user.phone, name=user.name)
+
+
+class SsoRequest(BaseModel):
+    token: str  # JWT issued by the Kadapala Groups site (HS256, shared secret)
+
+
+@router.post("/sso", response_model=TokenResponse)
+async def sso(req: SsoRequest, session: AsyncSession = Depends(get_session)) -> TokenResponse:
+    """Single sign-on from the Kadapala Groups website.
+
+    Kadapala signs a short-lived JWT (claims: ``phone``, optional ``name``) with
+    the shared ``KADAPALA_SSO_SECRET``; we verify it and mint our own session so a
+    farmer logged into the parent site is logged into SmartFarm on the subdomain.
+    Scaffold — finalise the exact claim set with the Kadapala auth team.
+    """
+    secret = get_settings().kadapala_sso_secret
+    if not secret:
+        raise HTTPException(status_code=503, detail="SSO is not configured.")
+    try:
+        claims = jwt.decode(req.token, secret, algorithms=["HS256"])
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid SSO token") from exc
+
+    phone = claims.get("phone")
+    if not phone:
+        raise HTTPException(status_code=400, detail="SSO token missing 'phone'")
+    user = await get_or_create_user(session, phone)
+    if claims.get("name") and not user.name:
+        user.name = claims["name"]
+        await session.commit()
+    token = create_access_token(user.id)
+    return TokenResponse(
+        access_token=token,
+        user=UserOut(id=user.id, phone=user.phone, name=user.name),
+    )
