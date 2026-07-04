@@ -49,7 +49,9 @@ async def get_price(crop_id: str, state: str | None = None) -> dict:
         params["filters[state]"] = state
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        # data.gov.in is often slow; give it headroom but still fall back on
+        # timeout / 5xx (their gateway returns 502/503 under load).
+        async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(DATA_GOV_URL, params=params)
             resp.raise_for_status()
             records = resp.json().get("records", [])
