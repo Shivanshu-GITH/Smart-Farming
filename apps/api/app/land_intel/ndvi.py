@@ -18,8 +18,14 @@ from app.core import cache
 from app.core.config import get_settings
 from app.core.geo import centroid_latlon, polygon_from_geojson
 
-OAUTH_URL = "https://services.sentinel-hub.com/oauth/token"
-STATS_URL = "https://services.sentinel-hub.com/api/v1/statistics"
+def _sh_urls() -> tuple[str, str]:
+    """(oauth token url, statistics url) for the configured Sentinel Hub base.
+
+    Works for both the commercial host and the free Copernicus Data Space host,
+    which share the same path structure under different domains.
+    """
+    base = get_settings().sentinelhub_base_url.rstrip("/")
+    return f"{base}/oauth/token", f"{base}/api/v1/statistics"
 
 _EVALSCRIPT = """//VERSION=3
 function setup() {
@@ -55,7 +61,7 @@ async def _get_token(client: httpx.AsyncClient, cid: str, secret: str) -> str | 
     if cached:
         return cached
     resp = await client.post(
-        OAUTH_URL,
+        _sh_urls()[0],
         data={
             "grant_type": "client_credentials",
             "client_id": cid,
@@ -130,7 +136,7 @@ async def get_ndvi(geometry: dict) -> dict:
                 result["error"] = "Could not authenticate with Sentinel Hub"
                 return result
             resp = await client.post(
-                STATS_URL, json=body,
+                _sh_urls()[1], json=body,
                 headers={"Authorization": f"Bearer {token}"},
             )
             resp.raise_for_status()
@@ -203,7 +209,7 @@ async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
             if not token:
                 result["error"] = "Could not authenticate with Sentinel Hub"
                 return result
-            resp = await client.post(STATS_URL, json=body,
+            resp = await client.post(_sh_urls()[1], json=body,
                                      headers={"Authorization": f"Bearer {token}"})
             resp.raise_for_status()
             data = resp.json()

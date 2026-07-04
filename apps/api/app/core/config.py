@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     openweather_api_key: str = ""
     sentinelhub_client_id: str = ""
     sentinelhub_client_secret: str = ""
+    # Sentinel Hub deployment base URL. Default is the commercial one; for the
+    # FREE Copernicus Data Space tier set:
+    #   https://sh.dataspace.copernicus.eu
+    sentinelhub_base_url: str = "https://services.sentinel-hub.com"
     # data.gov.in API key for live Agmarknet mandi prices (optional).
     data_gov_api_key: str = ""
     anthropic_api_key: str = ""
