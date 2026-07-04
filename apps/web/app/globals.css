@@ -205,6 +205,80 @@ html, body {
 .tag { font-size: 9px; background: #17341f; color: #6fe39a; border-radius: 4px;
   padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
 
+/* --- map location search --- */
+.map-search {
+  position: absolute; top: 12px; left: 56px; z-index: 5;
+  display: flex; gap: 6px; align-items: center; width: 340px; max-width: 40vw;
+}
+.map-search input {
+  flex: 1; background: rgba(22, 29, 27, .92); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; backdrop-filter: blur(4px);
+}
+.map-search input:focus { outline: none; border-color: var(--green); }
+.map-search-results {
+  position: absolute; top: 40px; left: 0; right: 0;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+}
+.map-search-item {
+  padding: 9px 12px; font-size: 12px; cursor: pointer; line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+}
+.map-search-item:last-child { border-bottom: none; }
+.map-search-item:hover { background: #15241a; }
+.map-search-item.muted { color: var(--muted); cursor: default; }
+
+/* --- farming system selector + full crop catalogue --- */
+.sys-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.sys {
+  flex: 1; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.sys:hover { border-color: var(--green-2); }
+.sys.active { background: #15241a; border-color: var(--green); color: var(--green); }
+.crop-list { max-height: 280px; overflow-y: auto; margin-top: 4px; }
+
+/* --- manual land entry --- */
+.manual-panel {
+  margin-top: 10px; padding: 10px; border: 1px dashed var(--border);
+  border-radius: 8px; background: var(--panel);
+}
+.manual-results { margin: 6px 0; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; }
+
+/* --- dedicated auth pages --- */
+.auth-page {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(1200px 500px at 20% -10%, rgba(63, 174, 106, .18), transparent),
+    radial-gradient(900px 400px at 90% 110%, rgba(63, 174, 106, .12), transparent),
+    var(--bg);
+  padding: 24px;
+}
+.auth-lang { position: fixed; top: 16px; right: 16px; }
+.auth-card {
+  width: 380px; max-width: 94vw; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 14px; padding: 28px;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, .45);
+}
+.auth-brand { justify-content: center; margin-bottom: 14px; }
+.auth-title { margin: 0 0 4px; font-size: 20px; text-align: center; }
+.auth-sub { text-align: center; margin-bottom: 14px; }
+.auth-btn { width: 100%; margin-top: 4px; }
+.auth-alt { text-align: center; font-size: 13px; margin: 10px 0 0; }
+.auth-alt a { color: var(--green); text-decoration: none; font-weight: 600; }
+.auth-alt a:hover { text-decoration: underline; }
+.divider {
+  display: flex; align-items: center; gap: 10px; color: var(--muted);
+  font-size: 11px; margin: 14px 0 10px; text-transform: uppercase;
+}
+.divider::before, .divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+.google-slot { display: flex; justify-content: center; min-height: 40px; }
+
 /* --- schemes / resources --- */
 .scheme { display: block; padding: 8px 0; border-bottom: 1px solid var(--border);
   text-decoration: none; }

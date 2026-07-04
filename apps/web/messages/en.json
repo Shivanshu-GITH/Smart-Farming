@@ -15,7 +15,44 @@
     "register": "Create account", "loginBtn": "Log in",
     "toggleToLogin": "Have an account? Log in",
     "toggleToRegister": "New here? Create an account",
-    "emailError": "Sign-in failed. Check your details and try again."
+    "emailError": "Sign-in failed. Check your details and try again.",
+    "pageLoginTitle": "Welcome back",
+    "pageSignupTitle": "Create your account",
+    "pageLoginSub": "Log in to open your saved fields and plans.",
+    "pageSignupSub": "Free account — your fields, plans and layouts saved in one place.",
+    "or": "or",
+    "goSignup": "New to SmartFarm? Create an account",
+    "goLogin": "Already have an account? Log in",
+    "backToApp": "← Back to the map"
+  },
+  "map": {
+    "search": "Search village, town or place…",
+    "go": "Search",
+    "noResults": "No places found"
+  },
+  "method": {
+    "title": "3 · Farming method & crops",
+    "tabRecommended": "Recommended",
+    "tabAll": "All crops",
+    "searchCrops": "Search crops…",
+    "planOnly": "📋 Get crop plan & economics"
+  },
+  "systems": {
+    "monoculture": { "name": "Single crop", "desc": "One crop across the whole field — paddy, wheat, cotton and other staples. Simplest to manage." },
+    "intercrop": { "name": "Intercropping", "desc": "2–3 crops in alternating row bands — spreads risk and lifts income; legumes feed the soil." },
+    "multilayer": { "name": "Multi-layer", "desc": "Up to 5 vertical layers on the same land — highest income per acre, more labour and skill." }
+  },
+  "manual": {
+    "cant": "Can't find your field on the map?",
+    "title": "Enter your field details",
+    "place": "Village / town name",
+    "findPlace": "Find",
+    "area": "Land area",
+    "unitAcre": "acre",
+    "unitHectare": "hectare",
+    "unitGuntha": "guntha",
+    "submit": "🌱 Get my farm plan",
+    "note": "The planting-layout map needs a drawn field — everything else (plans, profit, advice) works from these details."
   },
   "land": {
     "title": "1 · Your land",
@@ -43,7 +80,9 @@
     "use": "use →", "fillEmpty": "Fill empty layers with:"
   },
   "layout": {
-    "title": "4 · Planting layout", "totalPlants": "Total plants",
+    "title": "4 · Planting layout", "planTitle": "4 · Crop plan",
+    "drawNeeded": "Draw your field on the map to generate the planting layout.",
+    "totalPlants": "Total plants",
     "showHeatmap": "Show density heatmap", "calendar": "Crop calendar & inputs",
     "seed": "seed", "downloadPdf": "📄 Download PDF report", "preparing": "Preparing…",
     "savePlan": "💾 Save plan & layout to field", "savePlanDone": "Saved to your field ✓",

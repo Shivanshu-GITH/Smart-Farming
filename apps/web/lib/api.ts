@@ -56,8 +56,11 @@ export interface Recommendation {
 
 export interface LayoutResult {
   total_plants: number;
+  rendered_points?: number;
+  system?: string;
   truncated: boolean;
-  crops: { crop_id: string; name: string; layer: string; plant_count: number }[];
+  crops: { crop_id: string; name: string; layer: string; plant_count: number;
+           rendered_points?: number }[];
   planting_points: { type: "FeatureCollection"; features: any[] };
   heatmap: { grid: number; max_count: number; cells: any[] };
 }
@@ -97,6 +100,25 @@ export interface PlanResult {
 }
 
 export interface ChatMessage { role: "user" | "assistant"; content: string; }
+
+export interface LayerMeta { order: number; label: string; height_m: [number, number]; }
+
+export interface CatalogueCrop {
+  id: string; name: string; common_names: string[]; category: string;
+  layer: string; seasons: string[]; systems: string[];
+  spacing_cm: { row: number; plant: number };
+  duration_days: number; notes?: string;
+}
+
+export interface FarmingSystem {
+  id: string; name: string; crops_min: number; crops_max: number;
+  description: string; best_for: string;
+}
+
+export interface GeoResult {
+  display_name: string; lat: number; lon: number; type?: string;
+  bbox?: [number, number, number, number] | null; // [south, north, west, east]
+}
 
 export interface SchemeResource {
   id: string; name: string; category: string; audience: string;
@@ -140,8 +162,20 @@ export const api = {
     post<{ count: number; recommendations: Recommendation[] }>(
       "/agronomy/recommend", q),
 
-  layout: (geometry: Geometry, crop_ids: string[]) =>
-    post<LayoutResult>("/layout", { geometry, crop_ids }),
+  layout: (geometry: Geometry, crop_ids: string[], system = "multilayer") =>
+    post<LayoutResult>("/layout", { geometry, crop_ids, system }),
+
+  crops: () =>
+    get<{ layers: Record<string, LayerMeta>; crops: CatalogueCrop[] }>("/agronomy/crops"),
+
+  systems: () => get<{ systems: FarmingSystem[] }>("/agronomy/systems"),
+
+  geoSearch: (q: string) =>
+    get<{ results: GeoResult[] }>(`/geo/search?q=${encodeURIComponent(q)}`),
+
+  googleAuth: (credential: string) =>
+    post<{ access_token: string; token_type: string; user: User }>(
+      "/auth/google", { credential }),
 
   ndvi: (geometry: Geometry) =>
     post<{

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import maplibregl from "maplibre-gl";
-import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult } from "@/lib/api";
+import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult, type CatalogueCrop, type FarmingSystem, type GeoResult } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import AdvisoryChat from "@/components/AdvisoryChat";
 import SchemesCard from "@/components/SchemesCard";
@@ -37,6 +37,7 @@ export default function Planner() {
   const vertsRef = useRef<number[][]>([]);
 
   const [drawing, setDrawing] = useState(false);
+  const [vertCount, setVertCount] = useState(0);
   const [geometry, setGeometry] = useState<Geometry | null>(null);
   const [summary, setSummary] = useState<FieldSummary | null>(null);
   const [land, setLand] = useState<any>(null);
@@ -56,6 +57,32 @@ export default function Planner() {
   const [plans, setPlans] = useState<PlanResult[]>([]);
   const [economics, setEconomics] = useState<EconomicsResult | null>(null);
 
+  // ---- farming systems + full crop catalogue ----
+  const [systems, setSystems] = useState<FarmingSystem[]>([]);
+  const [system, setSystem] = useState("multilayer");
+  const [catalogue, setCatalogue] = useState<CatalogueCrop[]>([]);
+  const [cropTab, setCropTab] = useState<"recommended" | "all">("recommended");
+  const [cropSearch, setCropSearch] = useState("");
+
+  // ---- map location search ----
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<GeoResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  // ---- manual land entry (no polygon) ----
+  const [manualMode, setManualMode] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualPlaceQ, setManualPlaceQ] = useState("");
+  const [manualPlace, setManualPlace] = useState<GeoResult | null>(null);
+  const [manualResults, setManualResults] = useState<GeoResult[] | null>(null);
+  const [manualArea, setManualArea] = useState("");
+  const [manualUnit, setManualUnit] = useState<"acre" | "hectare" | "guntha">("acre");
+
+  useEffect(() => {
+    api.systems().then((r) => setSystems(r.systems)).catch(() => {});
+    api.crops().then((r) => setCatalogue(r.crops)).catch(() => {});
+  }, []);
+
   function landCtx(): Record<string, unknown> {
     return {
       ph: land?.soil?.ph ?? undefined,
@@ -66,16 +93,16 @@ export default function Planner() {
     };
   }
 
-  // Validate the selected multi-layer combo whenever the selection changes.
+  // Validate the selected combo (for the chosen system) whenever it changes.
   useEffect(() => {
     if (selected.length === 0) { setValidation(null); return; }
     let cancelled = false;
-    api.validate(selected, landCtx())
+    api.validate(selected, { ...landCtx(), system })
       .then((v) => { if (!cancelled) setValidation(v); })
       .catch(() => { if (!cancelled) setValidation(null); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, land]);
+  }, [selected, land, system]);
 
   // ---- auth + saved fields ----
   const { user } = useAuth();
@@ -142,6 +169,7 @@ export default function Planner() {
     m.on("click", (e) => {
       if (!drawingRef.current) return;
       vertsRef.current.push([e.lngLat.lng, e.lngLat.lat]);
+      setVertCount(vertsRef.current.length);
       renderDraw(m, vertsRef.current);
     });
     map.current = m;
@@ -151,7 +179,8 @@ export default function Planner() {
   function startDraw() {
     vertsRef.current = [];
     drawingRef.current = true;
-    setDrawing(true);
+    setDrawing(true); setVertCount(0);
+    setManualMode(false); setManualOpen(false);
     setGeometry(null); setSummary(null); setLand(null); setNdvi(null); setNdviSeries([]);
     setElevation(null); setSavedFieldId(null); setPlanSaved(false);
     setRecs([]); setSelected([]); setLayout(null);
@@ -259,6 +288,7 @@ export default function Planner() {
         rainfall_mm: report?.climate?.annual_rainfall_mm ?? undefined,
         temp_max_c: report?.climate?.temp_max_avg_c ?? undefined,
         season: report?.climate?.season ?? undefined,
+        system,
         limit: 8,
       });
       setRecs(recRes.recommendations);
@@ -270,8 +300,132 @@ export default function Planner() {
   }
 
   function toggleCrop(id: string) {
-    setSelected((cur) =>
-      cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id]);
+    const max = systems.find((s) => s.id === system)?.crops_max ?? 5;
+    setSelected((cur) => {
+      if (cur.includes(id)) return cur.filter((c) => c !== id);
+      if (max === 1) return [id];        // monoculture: picking replaces
+      if (cur.length >= max) return cur;  // at the system's cap
+      return [...cur, id];
+    });
+  }
+
+  function changeSystem(id: string) {
+    if (id === system) return;
+    setSystem(id);
+    setSelected([]); setLayout(null); setValidation(null); setDesign(null);
+    setPlans([]); setEconomics(null); setPlanSaved(false);
+    if (land) {
+      api.recommend({ ...landCtx(), system: id, limit: 8 })
+        .then((r) => setRecs(r.recommendations)).catch(() => {});
+    }
+  }
+
+  // ---- map location search ----
+  async function doSearch() {
+    const q = searchQ.trim();
+    if (q.length < 2) return;
+    setSearching(true);
+    try {
+      const r = await api.geoSearch(q);
+      setSearchResults(r.results);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function gotoResult(r: GeoResult) {
+    setSearchResults(null);
+    setSearchQ(r.display_name.split(",")[0]);
+    if (!map.current) return;
+    if (r.bbox) {
+      const [s, n, w, e] = r.bbox;  // Nominatim: [south, north, west, east]
+      map.current.fitBounds([[w, s], [e, n]], { padding: 60, duration: 900, maxZoom: 16 });
+    } else {
+      map.current.flyTo({ center: [r.lon, r.lat], zoom: 15, duration: 900 });
+    }
+  }
+
+  // ---- manual land entry (plans without a drawn polygon) ----
+  async function findManualPlace() {
+    const q = manualPlaceQ.trim();
+    if (q.length < 2) return;
+    try {
+      const r = await api.geoSearch(q);
+      setManualResults(r.results);
+    } catch {
+      setManualResults([]);
+    }
+  }
+
+  async function manualAnalyze() {
+    const areaVal = parseFloat(manualArea);
+    if (!manualPlace || !areaVal || areaVal <= 0) return;
+    const m2 = areaVal * (manualUnit === "acre" ? 4046.8564224
+      : manualUnit === "hectare" ? 10000 : 101.17141056);
+
+    setManualOpen(false); setManualMode(true);
+    setGeometry(null); setLayout(null); setSelected([]); setPlans([]);
+    setEconomics(null); setValidation(null); setDesign(null);
+    setNdvi(null); setNdviSeries([]); setSavedFieldId(null); setPlanSaved(false);
+
+    // "Tenali, Guntur, Andhra Pradesh, 522200, India" → drop postcode + country
+    const parts = manualPlace.display_name.split(",").map((p) => p.trim())
+      .filter((p) => !/^\d+$/.test(p) && p.toLowerCase() !== "india");
+    setSummary({
+      area: {
+        square_meters: m2,
+        hectares: +(m2 / 10000).toFixed(4),
+        acres: +(m2 / 4046.8564224).toFixed(4),
+        guntha: +(m2 / 101.17141056).toFixed(2),
+      },
+      perimeter_meters: 0,
+      centroid: { lat: manualPlace.lat, lon: manualPlace.lon },
+      bbox: [],
+      region: {
+        display_name: manualPlace.display_name,
+        district: parts.length > 1 ? parts[parts.length - 2] : parts[0],
+        state: parts.length ? parts[parts.length - 1] : undefined,
+      },
+    } as FieldSummary);
+    map.current?.flyTo({ center: [manualPlace.lon, manualPlace.lat], zoom: 14, duration: 900 });
+
+    try {
+      setBusy("Fetching soil & climate…");
+      const report = await api.landReport(manualPlace.lat, manualPlace.lon).catch(() => null);
+      setLand(report);
+      api.elevation(manualPlace.lat, manualPlace.lon).then(setElevation).catch(() => setElevation(null));
+      setBusy("Recommending crops…");
+      const recRes = await api.recommend({
+        ph: report?.soil?.ph ?? undefined,
+        texture: report?.soil?.texture_class ?? undefined,
+        rainfall_mm: report?.climate?.annual_rainfall_mm ?? undefined,
+        temp_max_c: report?.climate?.temp_max_avg_c ?? undefined,
+        season: report?.climate?.season ?? undefined,
+        system,
+        limit: 8,
+      });
+      setRecs(recRes.recommendations);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Manual mode: plans + economics from area alone (layout needs a polygon). */
+  async function generatePlanOnly() {
+    if (selected.length === 0) return;
+    const areaM2 = summary?.area.square_meters ?? 0;
+    setBusy("Preparing crop plan…");
+    try {
+      const ps = await Promise.all(
+        selected.map((id) => api.plan(id, areaM2).catch(() => null)));
+      setPlans(ps.filter((p): p is PlanResult => p !== null));
+      api.economics(selected, areaM2, summary?.region?.state)
+        .then(setEconomics).catch(() => setEconomics(null));
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function designStack() {
@@ -295,7 +449,7 @@ export default function Planner() {
     if (!geometry || selected.length === 0) return;
     setBusy("Placing plants…");
     try {
-      const res = await api.layout(geometry, selected);
+      const res = await api.layout(geometry, selected, system);
       setLayout(res);
       // Fetch per-crop plans (seed / fertiliser / calendar) for the summary.
       const areaM2 = summary?.area.square_meters ?? 0;
@@ -353,6 +507,32 @@ export default function Planner() {
   return (
     <div className="app">
       <div id="map" ref={mapEl} />
+
+      <div className="map-search">
+        <input
+          value={searchQ}
+          placeholder={t("map.search")}
+          onChange={(e) => setSearchQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") doSearch(); }}
+        />
+        <button className="btn btn-sm" disabled={searching || searchQ.trim().length < 2}
+          onClick={doSearch}>
+          {searching ? "…" : "🔍"}
+        </button>
+        {searchResults !== null && (
+          <div className="map-search-results">
+            {searchResults.length === 0 && (
+              <div className="map-search-item muted">{t("map.noResults")}</div>
+            )}
+            {searchResults.map((r, i) => (
+              <div className="map-search-item" key={i} onClick={() => gotoResult(r)}>
+                {r.display_name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <aside className="sidebar">
         <div className="brand">
           <span className="leaf">🌱</span>
@@ -366,10 +546,65 @@ export default function Planner() {
             {!drawing ? (
               <button className="btn" onClick={startDraw}>{t("land.draw")}</button>
             ) : (
-              <button className="btn" onClick={finishDraw}>{t("land.finish", { n: vertsRef.current.length })}</button>
+              <button className="btn" onClick={finishDraw}>{t("land.finish", { n: vertCount })}</button>
             )}
             {drawing && <span className="hint">{t("land.drawHint")}</span>}
           </div>
+
+          {!drawing && !geometry && !manualMode && (
+            <button className="btn-link" style={{ marginTop: 8 }}
+              onClick={() => setManualOpen((o) => !o)}>
+              {t("manual.cant")}
+            </button>
+          )}
+          {manualOpen && (
+            <div className="manual-panel">
+              <p className="hint" style={{ fontWeight: 600 }}>{t("manual.title")}</p>
+              <div className="save-row">
+                <input className="input" placeholder={t("manual.place")}
+                  value={manualPlaceQ}
+                  onChange={(e) => setManualPlaceQ(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") findManualPlace(); }} />
+                <button className="btn btn-sm" onClick={findManualPlace}>
+                  {t("manual.findPlace")}
+                </button>
+              </div>
+              {manualResults !== null && !manualPlace && (
+                <div className="manual-results">
+                  {manualResults.length === 0 && (
+                    <div className="map-search-item muted">{t("map.noResults")}</div>
+                  )}
+                  {manualResults.map((r, i) => (
+                    <div className="map-search-item" key={i}
+                      onClick={() => { setManualPlace(r); setManualResults(null); setManualPlaceQ(r.display_name.split(",")[0]); }}>
+                      {r.display_name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {manualPlace && (
+                <p className="hint">📍 {manualPlace.display_name}</p>
+              )}
+              <div className="save-row">
+                <input className="input" type="number" min="0" step="0.1"
+                  placeholder={t("manual.area")}
+                  value={manualArea} onChange={(e) => setManualArea(e.target.value)} />
+                <select className="lang-select" value={manualUnit}
+                  onChange={(e) => setManualUnit(e.target.value as any)}>
+                  <option value="acre">{t("manual.unitAcre")}</option>
+                  <option value="hectare">{t("manual.unitHectare")}</option>
+                  <option value="guntha">{t("manual.unitGuntha")}</option>
+                </select>
+              </div>
+              <button className="btn" style={{ width: "100%", marginTop: 8 }}
+                disabled={!manualPlace || !parseFloat(manualArea)}
+                onClick={manualAnalyze}>
+                {t("manual.submit")}
+              </button>
+              <p className="disclaimer">{t("manual.note")}</p>
+            </div>
+          )}
+
           {busy && <p className="spinner">⏳ {busy}</p>}
           {summary && (
             <div style={{ marginTop: 10 }}>
@@ -377,8 +612,10 @@ export default function Planner() {
                 <span className="v">{summary.area.acres} ac · {summary.area.hectares} ha</span></div>
               <div className="kv"><span className="k">{t("land.guntha")}</span>
                 <span className="v">{summary.area.guntha}</span></div>
-              <div className="kv"><span className="k">{t("land.perimeter")}</span>
-                <span className="v">{summary.perimeter_meters} m</span></div>
+              {summary.perimeter_meters > 0 && (
+                <div className="kv"><span className="k">{t("land.perimeter")}</span>
+                  <span className="v">{summary.perimeter_meters} m</span></div>
+              )}
               <div className="kv"><span className="k">{t("land.region")}</span>
                 <span className="v">{summary.region.district || summary.region.village || "—"}, {summary.region.state || ""}</span></div>
             </div>
@@ -459,29 +696,85 @@ export default function Planner() {
           </div>
         )}
 
-        {recs.length > 0 && (
+        {land && (
           <div className="card">
-            <h3>{t("recommend.title")}</h3>
-            {recs.map((r) => (
+            <h3>{t("method.title")}</h3>
+
+            <div className="sys-row">
+              {(systems.length ? systems : [
+                { id: "monoculture" }, { id: "intercrop" }, { id: "multilayer" },
+              ] as FarmingSystem[]).map((s) => (
+                <button key={s.id}
+                  className={"sys" + (system === s.id ? " active" : "")}
+                  onClick={() => changeSystem(s.id)}>
+                  {t(`systems.${s.id}.name`)}
+                </button>
+              ))}
+            </div>
+            <p className="hint" style={{ marginBottom: 8 }}>{t(`systems.${system}.desc`)}</p>
+
+            <div className="tabs">
+              <button className={"tab" + (cropTab === "recommended" ? " active" : "")}
+                onClick={() => setCropTab("recommended")}>{t("method.tabRecommended")}</button>
+              <button className={"tab" + (cropTab === "all" ? " active" : "")}
+                onClick={() => setCropTab("all")}>{t("method.tabAll")}</button>
+            </div>
+
+            {cropTab === "recommended" && recs.map((r) => (
               <div key={r.crop_id}
                 className={"crop" + (selected.includes(r.crop_id) ? " selected" : "")}
                 onClick={() => toggleCrop(r.crop_id)}>
                 <span className="dot" style={{ background: LAYER_COLORS[r.layer] }} />
                 <div>
                   <div className="name">{r.name}</div>
-                  <div className="meta">{r.layer} layer · {r.category}</div>
+                  <div className="meta">{r.layer} · {r.category}</div>
                 </div>
                 <span className={"badge " + (r.score >= 0.8 ? "high" : r.score >= 0.6 ? "ok" : "")}>
                   {r.suitability}
                 </span>
               </div>
             ))}
-            <div className="btn-row" style={{ marginTop: 8 }}>
-              <button className="btn secondary" disabled={designBusy || !land}
-                onClick={designStack}>
-                {designBusy ? t("recommend.designing") : t("recommend.design")}
-              </button>
-            </div>
+
+            {cropTab === "all" && (
+              <>
+                <input className="input" placeholder={t("method.searchCrops")}
+                  value={cropSearch} onChange={(e) => setCropSearch(e.target.value)} />
+                <div className="crop-list">
+                  {catalogue
+                    .filter((c) => c.systems.includes(system))
+                    .filter((c) => {
+                      const q = cropSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return c.name.toLowerCase().includes(q) ||
+                        c.common_names.some((n) => n.toLowerCase().includes(q));
+                    })
+                    .map((c) => (
+                      <div key={c.id}
+                        className={"crop" + (selected.includes(c.id) ? " selected" : "")}
+                        onClick={() => toggleCrop(c.id)}>
+                        <span className="dot" style={{ background: LAYER_COLORS[c.layer] }} />
+                        <div>
+                          <div className="name">{c.name}</div>
+                          <div className="meta">
+                            {c.common_names[0] ? `${c.common_names[0]} · ` : ""}
+                            {c.category} · {c.seasons.map((s) => s.split(" ")[0]).join("/")}
+                          </div>
+                        </div>
+                        <span className="badge">{c.duration_days}d</span>
+                      </div>
+                    ))}
+                </div>
+              </>
+            )}
+
+            {system === "multilayer" && (
+              <div className="btn-row" style={{ marginTop: 8 }}>
+                <button className="btn secondary" disabled={designBusy || !land}
+                  onClick={designStack}>
+                  {designBusy ? t("recommend.designing") : t("recommend.design")}
+                </button>
+              </div>
+            )}
 
             {design && (
               <div className="stacks">
@@ -540,19 +833,31 @@ export default function Planner() {
               </div>
             )}
 
-            <button className="btn" style={{ marginTop: 8 }}
-              disabled={selected.length === 0} onClick={generateLayout}>
-              {t("recommend.generate")}
-            </button>
+            {manualMode ? (
+              <>
+                <button className="btn" style={{ marginTop: 8 }}
+                  disabled={selected.length === 0} onClick={generatePlanOnly}>
+                  {t("method.planOnly")}
+                </button>
+                <p className="hint" style={{ marginTop: 6 }}>{t("layout.drawNeeded")}</p>
+              </>
+            ) : (
+              <button className="btn" style={{ marginTop: 8 }}
+                disabled={selected.length === 0 || !geometry} onClick={generateLayout}>
+                {t("recommend.generate")}
+              </button>
+            )}
           </div>
         )}
 
-        {layout && (
+        {(layout || plans.length > 0) && (
           <div className="card">
-            <h3>{t("layout.title")}</h3>
-            <div className="kv"><span className="k">{t("layout.totalPlants")}</span>
-              <span className="v">{layout.total_plants.toLocaleString()}{layout.truncated ? "+ (sampled)" : ""}</span></div>
-            {layout.crops.map((c) => (
+            <h3>{layout ? t("layout.title") : t("layout.planTitle")}</h3>
+            {layout && (
+              <div className="kv"><span className="k">{t("layout.totalPlants")}</span>
+                <span className="v">{layout.total_plants.toLocaleString()}{layout.truncated ? " (sampled view)" : ""}</span></div>
+            )}
+            {layout?.crops.map((c) => (
               <div className="kv" key={c.crop_id}>
                 <span className="k"><span className="dot" style={{ background: LAYER_COLORS[c.layer] }} />{c.name}</span>
                 <span className="v">{c.plant_count.toLocaleString()}</span>
@@ -579,21 +884,27 @@ export default function Planner() {
                 ))}
               </div>
             )}
-            <div className="btn-row" style={{ marginTop: 10 }}>
-              <label className="hint">
-                <input type="checkbox" onChange={(e) => toggleHeatmap(e.target.checked)} /> {t("layout.showHeatmap")}
-              </label>
-            </div>
-            <div className="legend">
-              {Object.entries(LAYER_COLORS).map(([k, v]) => (
-                <span key={k}><span className="dot" style={{ background: v }} />{k}</span>
-              ))}
-            </div>
-            <button className="btn secondary" style={{ marginTop: 10, width: "100%" }}
-              disabled={pdfBusy} onClick={downloadPdf}>
-              {pdfBusy ? t("layout.preparing") : t("layout.downloadPdf")}
-            </button>
-            {user && (savedFieldId ? (
+            {layout && (
+              <>
+                <div className="btn-row" style={{ marginTop: 10 }}>
+                  <label className="hint">
+                    <input type="checkbox" onChange={(e) => toggleHeatmap(e.target.checked)} /> {t("layout.showHeatmap")}
+                  </label>
+                </div>
+                <div className="legend">
+                  {Object.entries(LAYER_COLORS).map(([k, v]) => (
+                    <span key={k}><span className="dot" style={{ background: v }} />{k}</span>
+                  ))}
+                </div>
+              </>
+            )}
+            {geometry && (
+              <button className="btn secondary" style={{ marginTop: 10, width: "100%" }}
+                disabled={pdfBusy} onClick={downloadPdf}>
+                {pdfBusy ? t("layout.preparing") : t("layout.downloadPdf")}
+              </button>
+            )}
+            {layout && user && (savedFieldId ? (
               <button className="btn" style={{ marginTop: 8, width: "100%" }}
                 disabled={planSaved} onClick={savePlanAndLayout}>
                 {planSaved ? t("layout.savePlanDone") : t("layout.savePlan")}
@@ -635,7 +946,7 @@ export default function Planner() {
           </div>
         )}
 
-        {!geometry && !drawing && (
+        {!geometry && !drawing && !manualMode && (
           <p className="empty">{t("land.empty")}</p>
         )}
 
