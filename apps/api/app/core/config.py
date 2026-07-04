@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     # Default to the latest, most capable model for advisory chat.
     advisory_model: str = "claude-opus-4-8"
 
+    # Fallback AI providers (used when Anthropic isn't configured). Gemini and
+    # Groq have genuinely free tiers; OpenAI is paid. Priority when
+    # advisory_provider="auto": anthropic -> gemini -> groq -> openai.
+    advisory_provider: str = "auto"  # auto|anthropic|gemini|groq|openai
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"      # free tier, multimodal
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"      # free tier, text-only here
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+
     # Auth (phone/OTP + JWT). CHANGE jwt_secret in production.
     jwt_secret: str = "dev-insecure-change-me"
     jwt_algorithm: str = "HS256"

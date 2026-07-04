@@ -27,8 +27,12 @@ class DiagnoseRequest(BaseModel):
 
 @router.get("/status")
 def status() -> dict:
-    """Whether the Claude advisory chatbot is configured on this server."""
-    return {"configured": service.advisory_available()}
+    """Whether the advisory chatbot is configured, and which provider is active."""
+    return {
+        "configured": service.advisory_available(),
+        "provider": service.active_provider(),
+        "vision": service.vision_available(),
+    }
 
 
 @router.post("/chat")

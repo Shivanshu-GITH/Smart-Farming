@@ -50,7 +50,8 @@ def test_layout_endpoint_requires_crop():
 
 
 def test_advisory_status_unconfigured():
-    assert client.get("/advisory/status").json() == {"configured": False}
+    body = client.get("/advisory/status").json()
+    assert body["configured"] is False and body["provider"] is None
 
 
 def test_ndvi_graceful_without_credentials():
