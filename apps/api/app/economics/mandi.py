@@ -6,6 +6,8 @@ Prices from Agmarknet are per quintal (100 kg); we convert to per kg.
 """
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from app.core import cache
@@ -39,6 +41,12 @@ async def get_price(crop_id: str, state: str | None = None) -> dict:
     if cached is not None:
         return cached
 
+    # Circuit breaker: data.gov.in is frequently down (502) or very slow. Once a
+    # call fails, skip live calls for a few minutes and serve estimates instantly
+    # so the profit estimate never hangs behind a dead upstream.
+    if await cache.get("mandi:circuit_open"):
+        return fallback
+
     params = {
         "api-key": settings.data_gov_api_key,
         "format": "json",
@@ -49,13 +57,12 @@ async def get_price(crop_id: str, state: str | None = None) -> dict:
         params["filters[state]"] = state
 
     try:
-        # data.gov.in is often slow; give it headroom but still fall back on
-        # timeout / 5xx (their gateway returns 502/503 under load).
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=8) as client:
             resp = await client.get(DATA_GOV_URL, params=params)
             resp.raise_for_status()
             records = resp.json().get("records", [])
     except (httpx.HTTPError, ValueError):
+        await cache.set("mandi:circuit_open", True, ttl_seconds=300)
         return fallback
 
     prices = []
@@ -84,7 +91,6 @@ async def get_price(crop_id: str, state: str | None = None) -> dict:
 
 
 async def get_prices(crop_ids: list[str], state: str | None = None) -> dict[str, dict]:
-    out: dict[str, dict] = {}
-    for cid in crop_ids:
-        out[cid] = await get_price(cid, state)
-    return out
+    # Concurrent lookups so total latency is one request, not one-per-crop.
+    results = await asyncio.gather(*(get_price(cid, state) for cid in crop_ids))
+    return {cid: res for cid, res in zip(crop_ids, results)}
