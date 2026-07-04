@@ -108,6 +108,13 @@ def _gemini_url() -> str:
             f"{s.gemini_model}:generateContent?key={s.gemini_api_key}")
 
 
+def _gemini_gen_config() -> dict:
+    # Give room for the answer, and turn off 2.5-flash "thinking" so it doesn't
+    # consume the whole output budget (thinkingBudget is ignored by models that
+    # don't support it).
+    return {"maxOutputTokens": 2048, "thinkingConfig": {"thinkingBudget": 0}}
+
+
 def _gemini_text(data: dict) -> str:
     return "".join(
         part.get("text", "")
@@ -124,7 +131,7 @@ async def _gemini_chat(system: str, messages: list[dict]) -> str:
     body = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": contents,
-        "generationConfig": {"maxOutputTokens": 1024},
+        "generationConfig": _gemini_gen_config(),
     }
     async with httpx.AsyncClient(timeout=40) as client:
         resp = await client.post(_gemini_url(), json=body)
@@ -138,7 +145,7 @@ async def _gemini_vision(system, image_b64, media_type, text) -> str:
         "contents": [{"role": "user", "parts": [
             {"inline_data": {"mime_type": media_type, "data": image_b64}},
             {"text": text}]}],
-        "generationConfig": {"maxOutputTokens": 1024},
+        "generationConfig": _gemini_gen_config(),
     }
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(_gemini_url(), json=body)
