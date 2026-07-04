@@ -8,7 +8,7 @@ it from being a naive greedy pick while staying fast and fully explainable.
 """
 from __future__ import annotations
 
-from .catalogue import all_crops, layers
+from .catalogue import all_crops, crop_systems, layers
 from .recommend import score_crop
 
 
@@ -21,6 +21,8 @@ def _candidates(layer: str, *, ph, texture, rainfall, temp_max, season) -> list[
     for c in all_crops():
         if c["layer"] != layer:
             continue
+        if "multilayer" not in crop_systems(c):
+            continue  # the stack designer only proposes multilayer-suited crops
         if season and season not in c["seasons"]:
             continue
         s = score_crop(c, ph=ph, texture=texture, rainfall=rainfall,

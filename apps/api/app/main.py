@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.db import init_db, persistence_available
 from app.economics.router import router as economics_router
 from app.fields.router import router as fields_router
+from app.geo.router import router as geo_router
 from app.land_intel.router import router as land_intel_router
 from app.layout.router import router as layout_router
 from app.reports.router import router as reports_router
@@ -71,3 +72,4 @@ app.include_router(advisory_router)
 app.include_router(economics_router)
 app.include_router(resources_router)
 app.include_router(admin_router)
+app.include_router(geo_router)

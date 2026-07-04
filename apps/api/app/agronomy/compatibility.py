@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from .catalogue import all_crops, get_crop, layers
+from .catalogue import all_crops, crop_systems, get_crop, layers
 from .recommend import score_crop
 
 
@@ -28,7 +28,7 @@ def _resolve(crop_ids: list[str]) -> list[tuple[str, dict]]:
     return out
 
 
-def validate_combo(crop_ids: list[str]) -> dict:
+def validate_combo(crop_ids: list[str], system: str = "multilayer") -> dict:
     crops = _resolve(crop_ids)
     conflicts: list[dict] = []
     warnings: list[dict] = []
@@ -57,19 +57,20 @@ def validate_combo(crop_ids: list[str]) -> dict:
                     "message": f"{ca['name']} + {cb['name']} are good companions.",
                 })
 
-    # Same-layer crowding: multi-layer farming wants ~one crop per vertical layer.
+    # Same-layer crowding only matters when stacking vertical layers.
     by_layer: dict[str, list[str]] = defaultdict(list)
     for _cid, c in crops:
         by_layer[c["layer"]].append(c["name"])
-    for layer, names in by_layer.items():
-        if len(names) > 1:
-            warnings.append({
-                "type": "layer_crowding",
-                "layer": layer,
-                "message": f"{len(names)} crops share the {layer} layer "
-                           f"({', '.join(names)}) — they compete for the same "
-                           "space. Multi-layer farming works best with one per layer.",
-            })
+    if system == "multilayer":
+        for layer, names in by_layer.items():
+            if len(names) > 1:
+                warnings.append({
+                    "type": "layer_crowding",
+                    "layer": layer,
+                    "message": f"{len(names)} crops share the {layer} layer "
+                               f"({', '.join(names)}) — they compete for the same "
+                               "space. Multi-layer farming works best with one per layer.",
+                })
 
     # Season overlap: can they all be in the ground at once?
     season_sets = [set(c["seasons"]) for _cid, c in crops]
@@ -126,6 +127,8 @@ def suggest_fillers(crop_ids: list[str], *, ph=None, texture=None, rainfall=None
         for cand in all_crops():
             if cand["layer"] != layer or cand["id"] in selected_ids or cand["id"] in banned:
                 continue
+            if "multilayer" not in crop_systems(cand):
+                continue  # fillers are for the multilayer designer only
             if season and season not in cand["seasons"]:
                 continue  # must be plantable in the target season
             s = score_crop(cand, ph=ph, texture=texture, rainfall=rainfall,

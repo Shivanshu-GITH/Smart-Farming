@@ -14,6 +14,18 @@
     "beans":     {"seed_cost_per_kg": 150,  "input_cost_per_ha": 25000, "labour_cost_per_ha": 30000, "yield_kg_per_ha": [8000, 15000], "price_per_kg": 30, "agmarknet_commodity": "Beans"},
     "banana":    {"seed_cost_per_kg": 0,    "input_cost_per_ha": 90000, "labour_cost_per_ha": 60000, "yield_kg_per_ha": [40000, 60000],"price_per_kg": 15, "agmarknet_commodity": "Banana"},
     "papaya":    {"seed_cost_per_kg": 6000, "input_cost_per_ha": 70000, "labour_cost_per_ha": 50000, "yield_kg_per_ha": [40000, 80000],"price_per_kg": 15, "agmarknet_commodity": "Papaya"},
-    "drumstick": {"seed_cost_per_kg": 500,  "input_cost_per_ha": 30000, "labour_cost_per_ha": 30000, "yield_kg_per_ha": [10000, 25000],"price_per_kg": 40, "agmarknet_commodity": "Drumstick"}
+    "drumstick": {"seed_cost_per_kg": 500,  "input_cost_per_ha": 30000, "labour_cost_per_ha": 30000, "yield_kg_per_ha": [10000, 25000],"price_per_kg": 40, "agmarknet_commodity": "Drumstick"},
+    "paddy":     {"seed_cost_per_kg": 45,   "input_cost_per_ha": 30000, "labour_cost_per_ha": 35000, "yield_kg_per_ha": [4500, 6500],  "price_per_kg": 23, "agmarknet_commodity": "Paddy(Dhan)(Common)"},
+    "wheat":     {"seed_cost_per_kg": 35,   "input_cost_per_ha": 25000, "labour_cost_per_ha": 20000, "yield_kg_per_ha": [3500, 5500],  "price_per_kg": 24, "agmarknet_commodity": "Wheat"},
+    "maize":     {"seed_cost_per_kg": 350,  "input_cost_per_ha": 25000, "labour_cost_per_ha": 22000, "yield_kg_per_ha": [5000, 8000],  "price_per_kg": 20, "agmarknet_commodity": "Maize"},
+    "cotton":    {"seed_cost_per_kg": 4000, "input_cost_per_ha": 45000, "labour_cost_per_ha": 45000, "yield_kg_per_ha": [1500, 2500],  "price_per_kg": 70, "agmarknet_commodity": "Cotton"},
+    "groundnut": {"seed_cost_per_kg": 90,   "input_cost_per_ha": 35000, "labour_cost_per_ha": 30000, "yield_kg_per_ha": [1800, 3000],  "price_per_kg": 55, "agmarknet_commodity": "Groundnut"},
+    "chickpea":  {"seed_cost_per_kg": 90,   "input_cost_per_ha": 20000, "labour_cost_per_ha": 18000, "yield_kg_per_ha": [1200, 2000],  "price_per_kg": 55, "agmarknet_commodity": "Bengal Gram(Gram)(Whole)"},
+    "mustard":   {"seed_cost_per_kg": 120,  "input_cost_per_ha": 18000, "labour_cost_per_ha": 15000, "yield_kg_per_ha": [1200, 2000],  "price_per_kg": 55, "agmarknet_commodity": "Mustard"},
+    "sugarcane": {"seed_cost_per_kg": 4,    "input_cost_per_ha": 80000, "labour_cost_per_ha": 70000, "yield_kg_per_ha": [80000, 110000],"price_per_kg": 3.5, "agmarknet_commodity": "Sugarcane"},
+    "onion":     {"seed_cost_per_kg": 1500, "input_cost_per_ha": 45000, "labour_cost_per_ha": 50000, "yield_kg_per_ha": [25000, 40000],"price_per_kg": 15, "agmarknet_commodity": "Onion"},
+    "potato":    {"seed_cost_per_kg": 25,   "input_cost_per_ha": 60000, "labour_cost_per_ha": 45000, "yield_kg_per_ha": [20000, 30000],"price_per_kg": 12, "agmarknet_commodity": "Potato"},
+    "soybean":   {"seed_cost_per_kg": 90,   "input_cost_per_ha": 25000, "labour_cost_per_ha": 20000, "yield_kg_per_ha": [2000, 3500],  "price_per_kg": 45, "agmarknet_commodity": "Soyabean"},
+    "bajra":     {"seed_cost_per_kg": 250,  "input_cost_per_ha": 15000, "labour_cost_per_ha": 15000, "yield_kg_per_ha": [2000, 3000],  "price_per_kg": 25, "agmarknet_commodity": "Bajra(Pearl Millet/Cumbu)"}
   }
 }

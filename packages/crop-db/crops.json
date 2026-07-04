@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "note": "Curated agronomy knowledge base. Values are typical pan-India ranges from ICAR / state agri-university references and MUST be reviewed by an agronomist before production use. Spacing in cm; rainfall in mm; temperature in C; fertilizer NPK in kg/ha.",
+  "schema_version": 2,
+  "note": "Curated agronomy knowledge base. Values are typical pan-India ranges from ICAR / state agri-university packages of practices and MUST be reviewed by an agronomist before production use. Spacing in cm; rainfall in mm; temperature in C; fertilizer NPK in kg/ha. `systems` lists the farming systems a crop suits: monoculture, intercrop, multilayer.",
   "layers": {
     "underground": {"order": 0, "label": "Underground (roots/tubers)", "height_m": [0, 0.1]},
     "ground": {"order": 1, "label": "Ground (0-1 ft leafy)", "height_m": [0, 0.3]},
@@ -19,6 +19,7 @@
       "duration_days": 240,
       "fertilizer_npk_kg_ha": {"N": 60, "P": 50, "K": 120},
       "companions": ["banana", "chilli"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Shade-tolerant; excellent understory crop beneath banana/papaya in multilayer systems."
     },
     {
@@ -31,6 +32,7 @@
       "duration_days": 240,
       "fertilizer_npk_kg_ha": {"N": 75, "P": 50, "K": 50},
       "companions": ["banana", "papaya"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Needs partial shade and well-drained soil; classic underground layer crop."
     },
     {
@@ -43,6 +45,7 @@
       "duration_days": 45,
       "fertilizer_npk_kg_ha": {"N": 80, "P": 40, "K": 40},
       "companions": ["tomato", "chilli"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Fast ground-layer leafy; tolerates light shade; multiple cuttings."
     },
     {
@@ -55,6 +58,7 @@
       "duration_days": 40,
       "fertilizer_npk_kg_ha": {"N": 40, "P": 30, "K": 20},
       "companions": ["spinach", "tomato"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Quick ground cover; good intercrop in early multilayer establishment."
     },
     {
@@ -67,6 +71,7 @@
       "duration_days": 120,
       "fertilizer_npk_kg_ha": {"N": 120, "P": 80, "K": 60},
       "companions": ["spinach", "coriander", "marigold"], "antagonists": ["potato"],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Middle-layer staple; needs full sun, so keep on south side of taller crops."
     },
     {
@@ -79,6 +84,7 @@
       "duration_days": 150,
       "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
       "companions": ["chilli", "spinach"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Hardy middle-layer crop; long harvest window."
     },
     {
@@ -91,6 +97,7 @@
       "duration_days": 160,
       "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
       "companions": ["tomato", "brinjal", "turmeric"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Andhra/Telangana mainstay; good middle layer with turmeric understory."
     },
     {
@@ -103,6 +110,7 @@
       "duration_days": 100,
       "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
       "companions": ["chilli", "spinach"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Fast middle-layer; full sun."
     },
     {
@@ -115,6 +123,7 @@
       "duration_days": 90,
       "fertilizer_npk_kg_ha": {"N": 25, "P": 60, "K": 50},
       "companions": ["banana", "papaya", "okra"], "antagonists": [],
+      "systems": ["monoculture", "intercrop", "multilayer"],
       "notes": "Nitrogen-fixing climber; train on trellis or on tall crops in multilayer."
     },
     {
@@ -128,6 +137,7 @@
       "duration_days": 360,
       "fertilizer_npk_kg_ha": {"N": 200, "P": 60, "K": 300},
       "companions": ["turmeric", "ginger", "beans"], "antagonists": [],
+      "systems": ["monoculture", "multilayer"],
       "notes": "Top-layer canopy; provides shade for turmeric/ginger understory — core of 5-layer systems."
     },
     {
@@ -140,6 +150,7 @@
       "duration_days": 300,
       "fertilizer_npk_kg_ha": {"N": 200, "P": 200, "K": 250},
       "companions": ["turmeric", "ginger", "spinach"], "antagonists": [],
+      "systems": ["monoculture", "multilayer"],
       "notes": "Fast top-layer fruit; partial canopy suitable over shade-tolerant understory."
     },
     {
@@ -152,7 +163,166 @@
       "duration_days": 270,
       "fertilizer_npk_kg_ha": {"N": 75, "P": 40, "K": 40},
       "companions": ["turmeric", "chilli", "beans"], "antagonists": [],
+      "systems": ["monoculture", "multilayer"],
       "notes": "Drought-hardy top layer; light canopy ideal for multilayer in dry regions."
+    },
+    {
+      "id": "paddy", "name": "Paddy (Rice)", "common_names": ["Dhan", "Chawal", "Vari"], "category": "cereal",
+      "layer": "middle", "height_m": 1.0,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [5.0, 7.5], "textures": ["Clay", "Clay loam", "Loam / Silt loam"],
+      "rainfall_mm": [1000, 2500], "temp_c": [20, 37],
+      "spacing_cm": {"row": 20, "plant": 15}, "seed_rate_kg_per_ha": 25,
+      "duration_days": 135,
+      "fertilizer_npk_kg_ha": {"N": 120, "P": 60, "K": 40},
+      "companions": [], "antagonists": [],
+      "systems": ["monoculture"],
+      "notes": "Transplanted puddled rice; needs standing water or assured irrigation. Rabi crop only with irrigation."
+    },
+    {
+      "id": "wheat", "name": "Wheat", "common_names": ["Gehu", "Godhuma"], "category": "cereal",
+      "layer": "middle", "height_m": 0.9,
+      "seasons": ["Rabi (winter)"],
+      "ph": [6.0, 7.8], "textures": ["Loam / Silt loam", "Clay loam"],
+      "rainfall_mm": [400, 1100], "temp_c": [10, 25],
+      "spacing_cm": {"row": 22, "plant": 5}, "seed_rate_kg_per_ha": 100,
+      "duration_days": 140,
+      "fertilizer_npk_kg_ha": {"N": 120, "P": 60, "K": 40},
+      "companions": ["mustard", "chickpea"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Rabi staple for north/central India; wheat + mustard row intercropping is a classic combination."
+    },
+    {
+      "id": "maize", "name": "Maize", "common_names": ["Makka", "Corn"], "category": "cereal",
+      "layer": "middle", "height_m": 2.0,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [5.5, 7.5], "textures": ["Loam / Silt loam", "Sandy loam", "Clay loam"],
+      "rainfall_mm": [500, 1200], "temp_c": [18, 32],
+      "spacing_cm": {"row": 60, "plant": 20}, "seed_rate_kg_per_ha": 20,
+      "duration_days": 110,
+      "fertilizer_npk_kg_ha": {"N": 120, "P": 60, "K": 40},
+      "companions": ["beans", "groundnut", "soybean"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Tall cereal; classic intercrop partner for legumes (maize + beans/soybean)."
+    },
+    {
+      "id": "cotton", "name": "Cotton", "common_names": ["Kapas", "Patti"], "category": "fibre",
+      "layer": "middle", "height_m": 1.2,
+      "seasons": ["Kharif (monsoon)"],
+      "ph": [6.0, 8.0], "textures": ["Clay loam", "Loam / Silt loam", "Clay"],
+      "rainfall_mm": [500, 1100], "temp_c": [21, 35],
+      "spacing_cm": {"row": 90, "plant": 60}, "seed_rate_kg_per_ha": 2.5,
+      "duration_days": 180,
+      "fertilizer_npk_kg_ha": {"N": 120, "P": 60, "K": 60},
+      "companions": ["groundnut", "soybean", "chickpea"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Long-duration Kharif cash crop; wide rows suit legume intercrops in the first 60-70 days."
+    },
+    {
+      "id": "groundnut", "name": "Groundnut", "common_names": ["Moongphali", "Peanut", "Verusenaga"], "category": "oilseed",
+      "layer": "ground", "height_m": 0.35,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)"],
+      "ph": [6.0, 7.5], "textures": ["Sandy loam", "Loam / Silt loam", "Sandy"],
+      "rainfall_mm": [500, 1250], "temp_c": [20, 34],
+      "spacing_cm": {"row": 30, "plant": 10}, "seed_rate_kg_per_ha": 100,
+      "duration_days": 110,
+      "fertilizer_npk_kg_ha": {"N": 20, "P": 40, "K": 40},
+      "companions": ["maize", "cotton", "bajra"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Nitrogen-fixing oilseed; needs loose well-drained soil for pegging. Gypsum at flowering helps pod fill."
+    },
+    {
+      "id": "chickpea", "name": "Chickpea", "common_names": ["Chana", "Bengal gram", "Senagalu"], "category": "pulse",
+      "layer": "ground", "height_m": 0.5,
+      "seasons": ["Rabi (winter)"],
+      "ph": [6.0, 8.0], "textures": ["Clay loam", "Loam / Silt loam", "Sandy loam"],
+      "rainfall_mm": [300, 900], "temp_c": [10, 28],
+      "spacing_cm": {"row": 30, "plant": 10}, "seed_rate_kg_per_ha": 75,
+      "duration_days": 110,
+      "fertilizer_npk_kg_ha": {"N": 20, "P": 40, "K": 20},
+      "companions": ["wheat", "mustard", "cotton"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Rain-fed Rabi pulse; fixes nitrogen and does well on residual moisture."
+    },
+    {
+      "id": "mustard", "name": "Mustard", "common_names": ["Sarson", "Rai", "Avalu"], "category": "oilseed",
+      "layer": "middle", "height_m": 1.2,
+      "seasons": ["Rabi (winter)"],
+      "ph": [6.0, 7.5], "textures": ["Loam / Silt loam", "Sandy loam", "Clay loam"],
+      "rainfall_mm": [300, 800], "temp_c": [10, 25],
+      "spacing_cm": {"row": 45, "plant": 15}, "seed_rate_kg_per_ha": 5,
+      "duration_days": 120,
+      "fertilizer_npk_kg_ha": {"N": 60, "P": 40, "K": 40},
+      "companions": ["wheat", "chickpea"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Low-water Rabi oilseed; 1 row mustard per 8-9 rows wheat is a proven pattern."
+    },
+    {
+      "id": "sugarcane", "name": "Sugarcane", "common_names": ["Ganna", "Cheruku"], "category": "cash",
+      "layer": "middle", "height_m": 3.0,
+      "seasons": ["Kharif (monsoon)", "Rabi (winter)", "Zaid (summer)"],
+      "ph": [6.0, 8.0], "textures": ["Clay loam", "Loam / Silt loam", "Clay"],
+      "rainfall_mm": [1000, 2500], "temp_c": [20, 38],
+      "spacing_cm": {"row": 90, "plant": 45}, "seed_rate_kg_per_ha": 8000,
+      "plants_note": "Planted as three-bud setts (~8 t/ha by weight), not seed",
+      "duration_days": 360,
+      "fertilizer_npk_kg_ha": {"N": 250, "P": 100, "K": 120},
+      "companions": ["chickpea", "coriander", "potato"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Year-long water-heavy cash crop; short-duration intercrops fit in the first 90-100 days before canopy closure."
+    },
+    {
+      "id": "onion", "name": "Onion", "common_names": ["Pyaz", "Ulligadda"], "category": "vegetable",
+      "layer": "underground", "height_m": 0.4,
+      "seasons": ["Rabi (winter)", "Kharif (monsoon)"],
+      "ph": [6.0, 7.5], "textures": ["Loam / Silt loam", "Sandy loam", "Clay loam"],
+      "rainfall_mm": [400, 1000], "temp_c": [13, 30],
+      "spacing_cm": {"row": 15, "plant": 10}, "seed_rate_kg_per_ha": 8,
+      "duration_days": 130,
+      "fertilizer_npk_kg_ha": {"N": 100, "P": 50, "K": 50},
+      "companions": ["tomato", "chilli"], "antagonists": ["beans"],
+      "systems": ["monoculture", "intercrop", "multilayer"],
+      "notes": "Shallow-rooted bulb crop; avoid planting next to beans/legumes."
+    },
+    {
+      "id": "potato", "name": "Potato", "common_names": ["Aloo", "Bangaladumpa"], "category": "vegetable",
+      "layer": "underground", "height_m": 0.5,
+      "seasons": ["Rabi (winter)"],
+      "ph": [5.0, 6.5], "textures": ["Sandy loam", "Loam / Silt loam"],
+      "rainfall_mm": [300, 700], "temp_c": [10, 25],
+      "spacing_cm": {"row": 60, "plant": 20}, "seed_rate_kg_per_ha": 2500,
+      "plants_note": "Planted as seed tubers (~2.5 t/ha)",
+      "duration_days": 100,
+      "fertilizer_npk_kg_ha": {"N": 150, "P": 100, "K": 100},
+      "companions": ["maize", "wheat"], "antagonists": ["tomato"],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Cool-season tuber; keep away from tomato (shared blight/pests). Needs earthing up."
+    },
+    {
+      "id": "soybean", "name": "Soybean", "common_names": ["Bhat", "Soya"], "category": "oilseed",
+      "layer": "ground", "height_m": 0.6,
+      "seasons": ["Kharif (monsoon)"],
+      "ph": [6.0, 7.5], "textures": ["Clay loam", "Loam / Silt loam"],
+      "rainfall_mm": [600, 1200], "temp_c": [20, 32],
+      "spacing_cm": {"row": 45, "plant": 5}, "seed_rate_kg_per_ha": 65,
+      "duration_days": 100,
+      "fertilizer_npk_kg_ha": {"N": 30, "P": 60, "K": 40},
+      "companions": ["maize", "cotton"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Kharif oilseed-pulse; fixes nitrogen. Central India staple rotation with wheat."
+    },
+    {
+      "id": "bajra", "name": "Pearl Millet", "common_names": ["Bajra", "Sajjalu", "Cumbu"], "category": "cereal",
+      "layer": "middle", "height_m": 2.0,
+      "seasons": ["Kharif (monsoon)", "Zaid (summer)"],
+      "ph": [6.0, 8.5], "textures": ["Sandy", "Sandy loam", "Loam / Silt loam"],
+      "rainfall_mm": [250, 800], "temp_c": [25, 40],
+      "spacing_cm": {"row": 45, "plant": 15}, "seed_rate_kg_per_ha": 5,
+      "duration_days": 85,
+      "fertilizer_npk_kg_ha": {"N": 60, "P": 40, "K": 20},
+      "companions": ["groundnut", "chickpea"], "antagonists": [],
+      "systems": ["monoculture", "intercrop"],
+      "notes": "Hardy dryland cereal for arid zones; the go-to Kharif crop where rainfall is under 500 mm."
     }
   ]
 }

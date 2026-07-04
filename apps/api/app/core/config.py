@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
+    # Google sign-in: OAuth client ID from console.cloud.google.com (free).
+    # Empty disables /auth/google. The SAME id goes to the frontend as
+    # NEXT_PUBLIC_GOOGLE_CLIENT_ID so the button renders.
+    google_client_id: str = ""
+
     # Auth (phone/OTP + JWT). CHANGE jwt_secret in production.
     jwt_secret: str = "dev-insecure-change-me"
     jwt_algorithm: str = "HS256"

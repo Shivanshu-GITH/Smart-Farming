@@ -7,7 +7,7 @@ alongside the score so the UI can show *why*.
 """
 from __future__ import annotations
 
-from .catalogue import all_crops
+from .catalogue import all_crops, crop_systems
 
 
 def _range_score(value: float | None, lo: float, hi: float, slack: float) -> float:
@@ -82,8 +82,10 @@ def _label(score: float) -> str:
 
 
 def recommend(*, ph=None, texture=None, rainfall=None, temp_max=None,
-              season=None, layer=None, limit=8) -> list[dict]:
+              season=None, layer=None, system=None, limit=8) -> list[dict]:
     crops = all_crops()
+    if system:
+        crops = [c for c in crops if system in crop_systems(c)]
     if layer:
         crops = [c for c in crops if c["layer"] == layer]
     scored = [

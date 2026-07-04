@@ -66,6 +66,49 @@ async def login(
     return _token_response(user)
 
 
+# --- Google sign-in ---
+
+class GoogleAuth(BaseModel):
+    credential: str  # Google Identity Services ID token (JWT)
+
+
+@router.post("/google", response_model=TokenResponse)
+async def google_auth(
+    req: GoogleAuth, session: AsyncSession = Depends(get_session)
+) -> TokenResponse:
+    """Sign in with Google. Verifies the GIS ID token against Google's
+    tokeninfo endpoint and checks it was issued for OUR client id."""
+    import httpx
+
+    client_id = get_settings().google_client_id
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://oauth2.googleapis.com/tokeninfo",
+                                    params={"id_token": req.credential})
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not verify Google token") from exc
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+    info = resp.json()
+    if info.get("aud") != client_id:
+        raise HTTPException(status_code=401, detail="Token issued for another app")
+    email = (info.get("email") or "").strip().lower()
+    if not email or str(info.get("email_verified")).lower() != "true":
+        raise HTTPException(status_code=401, detail="Google account has no verified email")
+
+    user = await get_user_by_email(session, email)
+    if user is None:
+        user = await create_email_user(session, email, None, info.get("name"))
+    elif info.get("name") and not user.name:
+        user.name = info["name"]
+        await session.commit()
+    return _token_response(user)
+
+
 @router.post("/otp/request", response_model=OtpRequestResponse)
 async def request_otp(req: OtpRequest) -> OtpRequestResponse:
     """Issue a one-time code for a phone number.

@@ -9,8 +9,13 @@ from app.agronomy.recommend import recommend, score_crop
 
 def test_catalogue_has_expected_crops():
     ids = {c["id"] for c in all_crops()}
-    assert {"tomato", "banana", "turmeric"} <= ids
-    assert len(all_crops()) == 12
+    assert {"tomato", "banana", "turmeric"} <= ids          # horticulture originals
+    assert {"paddy", "wheat", "cotton", "sugarcane"} <= ids  # field crops
+    assert len(all_crops()) == 24
+    # every crop declares which farming systems it suits
+    for c in all_crops():
+        assert set(c["systems"]) <= {"monoculture", "intercrop", "multilayer"}
+        assert c["systems"]
 
 
 def test_score_within_bounds_and_unknown_is_neutral():

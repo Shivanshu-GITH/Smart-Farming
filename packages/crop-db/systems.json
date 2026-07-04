@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "note": "Farming systems a farmer can choose. crops_min/crops_max bound the selection; the layout engine renders each system differently.",
+  "systems": [
+    {
+      "id": "monoculture",
+      "name": "Single crop",
+      "crops_min": 1,
+      "crops_max": 1,
+      "description": "One crop across the whole field — paddy, wheat, cotton and other traditional field crops. Simplest to manage and mechanise.",
+      "best_for": "Staple grains, assured-irrigation fields, mechanised farms"
+    },
+    {
+      "id": "intercrop",
+      "name": "Intercropping",
+      "crops_min": 2,
+      "crops_max": 3,
+      "description": "Two or three crops in alternating row bands (e.g. 2 rows maize : 1 row soybean). Spreads risk and improves per-acre income; legume partners add nitrogen.",
+      "best_for": "Rain-fed fields, risk reduction, soil health"
+    },
+    {
+      "id": "multilayer",
+      "name": "Multi-layer farming",
+      "crops_min": 2,
+      "crops_max": 5,
+      "description": "Up to five vertical layers — canopy fruit trees, climbers, bushy vegetables, leafy ground cover and root crops sharing the same land. Highest income per acre; more labour and know-how.",
+      "best_for": "Small holdings, horticulture belts, maximum revenue per acre"
+    }
+  ]
+}

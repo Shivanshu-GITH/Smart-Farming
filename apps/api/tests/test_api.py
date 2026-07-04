@@ -19,8 +19,35 @@ def test_health_and_root():
 
 def test_crops_catalogue():
     body = client.get("/agronomy/crops").json()
-    assert len(body["crops"]) == 12
+    assert len(body["crops"]) == 24
     assert "underground" in body["layers"]
+
+
+def test_systems_catalogue():
+    body = client.get("/agronomy/systems").json()
+    ids = {s["id"] for s in body["systems"]}
+    assert ids == {"monoculture", "intercrop", "multilayer"}
+
+
+def test_recommend_respects_system_filter():
+    r = client.post("/agronomy/recommend",
+                    json={"system": "multilayer", "limit": 30}).json()
+    ids = {x["crop_id"] for x in r["recommendations"]}
+    assert "paddy" not in ids       # monoculture-only crop
+    assert "turmeric" in ids
+
+    r = client.post("/agronomy/recommend",
+                    json={"system": "monoculture", "limit": 30}).json()
+    assert any(x["crop_id"] == "paddy" for x in r["recommendations"])
+
+
+def test_google_auth_disabled_without_client_id():
+    assert client.post("/auth/google", json={"credential": "x"}).status_code == 503
+
+
+def test_geo_search_validates_query():
+    assert client.get("/geo/search").status_code == 422       # q required
+    assert client.get("/geo/search", params={"q": "a"}).status_code == 422  # too short
 
 
 def test_validate_endpoint():

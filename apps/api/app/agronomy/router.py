@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from .catalogue import all_crops, layers
+from .catalogue import all_crops, layers, load_systems
 from .compatibility import suggest_fillers, validate_combo
 from .optimizer import design_stacks
 from .plan import build_plan
@@ -17,6 +17,12 @@ def crops() -> dict:
     return {"layers": layers(), "crops": all_crops()}
 
 
+@router.get("/systems")
+def systems() -> dict:
+    """Farming systems a farmer can choose (monoculture / intercrop / multilayer)."""
+    return {"systems": load_systems()}
+
+
 class RecommendQuery(BaseModel):
     ph: float | None = None
     texture: str | None = None
@@ -24,6 +30,7 @@ class RecommendQuery(BaseModel):
     temp_max_c: float | None = None
     season: str | None = None
     layer: str | None = None
+    system: str | None = None
     limit: int = 8
 
 
@@ -31,7 +38,8 @@ class RecommendQuery(BaseModel):
 def recommend_crops(q: RecommendQuery) -> dict:
     results = recommend(
         ph=q.ph, texture=q.texture, rainfall=q.rainfall_mm,
-        temp_max=q.temp_max_c, season=q.season, layer=q.layer, limit=q.limit,
+        temp_max=q.temp_max_c, season=q.season, layer=q.layer,
+        system=q.system, limit=q.limit,
     )
     return {"count": len(results), "recommendations": results}
 
@@ -51,6 +59,7 @@ def crop_plan(q: PlanQuery) -> dict:
 
 class ValidateQuery(BaseModel):
     crop_ids: list[str]
+    system: str = "multilayer"
     # optional land context — enables filler suggestions for empty layers
     ph: float | None = None
     texture: str | None = None
@@ -62,10 +71,10 @@ class ValidateQuery(BaseModel):
 
 @router.post("/validate")
 def validate(q: ValidateQuery) -> dict:
-    """Check whether a chosen multi-layer crop combo works together, and suggest
-    compatible crops for the empty vertical layers."""
-    result = validate_combo(q.crop_ids)
-    if q.suggest_fillers:
+    """Check whether a chosen crop combo works together for the given farming
+    system, and (for multilayer) suggest crops for the empty vertical layers."""
+    result = validate_combo(q.crop_ids, q.system)
+    if q.suggest_fillers and q.system == "multilayer":
         result["fillers"] = suggest_fillers(
             q.crop_ids, ph=q.ph, texture=q.texture, rainfall=q.rainfall_mm,
             temp_max=q.temp_max_c, season=q.season,
