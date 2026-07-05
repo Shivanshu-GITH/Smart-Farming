@@ -58,6 +58,75 @@ def test_layered_location_finder():
     assert client.get("/geo/districts", params={"state": "Nowhere"}).status_code == 404
 
 
+def test_villages_validates_params():
+    assert client.get("/geo/villages").status_code == 422
+    assert client.get("/geo/villages", params={"state": "UP"}).status_code == 422
+
+
+def test_villages_directory(monkeypatch):
+    """Village directory: sorted, deduped, name:en preferred, coords included."""
+    from app.geo import router as geo
+
+    async def fake_admin(q):
+        assert "Testpur district" in q
+        return {"osm_type": "relation", "osm_id": 12345, "bbox": [26.0, 27.0, 80.0, 81.0]}
+
+    async def fake_overpass(query):
+        assert "3600012345" in query and "place" in query
+        return [
+            {"lat": 26.5, "lon": 80.5, "tags": {"name": "Zamania", "place": "village"}},
+            {"lat": 26.6, "lon": 80.6,
+             "tags": {"name": "हैदरगढ़", "name:en": "Haidergarh", "place": "town"}},
+            {"lat": 26.7, "lon": 80.7, "tags": {"name": "Zamania", "place": "hamlet"}},  # dupe
+            {"lat": 26.8, "lon": 80.8, "tags": {"place": "village"}},                    # unnamed
+        ]
+
+    monkeypatch.setattr(geo, "_resolve_admin", fake_admin)
+    monkeypatch.setattr(geo, "_overpass", fake_overpass)
+    body = client.get("/geo/villages",
+                      params={"state": "Test State", "district": "Testpur"}).json()
+    names = [v["name"] for v in body["villages"]]
+    assert names == ["Haidergarh", "Zamania"]        # sorted, deduped, name:en wins
+    assert body["count"] == 2
+    assert body["villages"][0]["lat"] == 26.6 and body["villages"][0]["kind"] == "town"
+
+
+def test_villages_bundled_geonames_index(monkeypatch):
+    """Real UP dataset: Barabanki bbox must contain Haidargarh with coords."""
+    from app.geo import router as geo
+
+    async def fake_admin(q):  # only the bbox lookup is mocked — no network
+        return {"osm_type": "relation", "osm_id": 1959692,
+                "bbox": [26.30, 27.20, 80.95, 81.90]}
+
+    monkeypatch.setattr(geo, "_resolve_admin", fake_admin)
+    body = client.get("/geo/villages",
+                      params={"state": "Uttar Pradesh", "district": "Barabanki"}).json()
+    assert body["source"].startswith("GeoNames")
+    assert body["count"] > 1000          # a real district, not 20 OSM nodes
+    hg = [v for v in body["villages"] if v["name"] == "Haidargarh"]
+    # two distinct real villages share the name — both kept; one is the town
+    assert any(abs(v["lat"] - 26.60376) < 0.001 for v in hg)
+    names = [v["name"].lower() for v in body["villages"]]
+    assert names == sorted(names)
+
+
+def test_villages_falls_back_gracefully(monkeypatch):
+    from app.geo import router as geo
+
+    async def fake_admin(q):
+        return {"osm_type": "relation", "osm_id": 99, "bbox": None}
+
+    async def fake_overpass(query):
+        return None  # all mirrors down
+
+    monkeypatch.setattr(geo, "_resolve_admin", fake_admin)
+    monkeypatch.setattr(geo, "_overpass", fake_overpass)
+    body = client.get("/geo/villages",
+                      params={"state": "Test State", "district": "Downpur"}).json()
+    assert body["villages"] == [] and "error" in body
+
+
 def test_economics_scales_to_planting_area():
     body = {"crop_ids": ["banana"], "area_m2": 10000, "use_mandi": False}
     gross = client.post("/economics/estimate", json=body).json()

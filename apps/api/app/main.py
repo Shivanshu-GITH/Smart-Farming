@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.admin.router import router as admin_router
 from app.advisory.router import router as advisory_router
@@ -45,6 +46,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Village directories and layouts are the big payloads (100s of KB) — gzip
+# matters for farmers on slow rural connections.
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 
 @app.get("/", tags=["meta"])

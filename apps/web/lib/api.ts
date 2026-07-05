@@ -131,6 +131,8 @@ export interface GeoResult {
   bbox?: [number, number, number, number] | null; // [south, north, west, east]
 }
 
+export interface GeoVillage { name: string; lat: number; lon: number; kind?: string }
+
 export interface SchemeResource {
   id: string; name: string; category: string; audience: string;
   description: string; url: string;
@@ -195,6 +197,12 @@ export const api = {
 
   geoDistricts: (state: string) =>
     get<{ districts: string[] }>(`/geo/districts?state=${encodeURIComponent(state)}`),
+
+  geoVillages: (state: string, district: string) => {
+    const p = new URLSearchParams({ state, district });
+    return get<{ district: string; count?: number; villages: GeoVillage[]; error?: string }>(
+      `/geo/villages?${p.toString()}`);
+  },
 
   googleAuth: (credential: string) =>
     post<{ access_token: string; token_type: string; user: User }>(

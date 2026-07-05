@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import maplibregl from "maplibre-gl";
-import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult, type CatalogueCrop, type FarmingSystem, type GeoResult } from "@/lib/api";
+import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult, type CatalogueCrop, type FarmingSystem, type GeoResult, type GeoVillage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import AdvisoryChat from "@/components/AdvisoryChat";
 import SchemesCard from "@/components/SchemesCard";
@@ -25,8 +25,24 @@ const SAT_STYLE: maplibregl.StyleSpecification = {
       tileSize: 256,
       attribution: "Esri World Imagery",
     },
+    // Google-Maps-style hybrid overlays: roads + place names/admin borders.
+    roads: {
+      type: "raster",
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256,
+    },
+    labels: {
+      type: "raster",
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+      tileSize: 256,
+      attribution: "Esri Boundaries & Places",
+    },
   },
-  layers: [{ id: "sat", type: "raster", source: "sat" }],
+  layers: [
+    { id: "sat", type: "raster", source: "sat" },
+    { id: "roads", type: "raster", source: "roads" },
+    { id: "labels", type: "raster", source: "labels" },
+  ],
 };
 
 export default function Planner() {
@@ -78,6 +94,14 @@ export default function Planner() {
   const [finderVillage, setFinderVillage] = useState("");
   const [finderResults, setFinderResults] = useState<GeoResult[] | null>(null);
   const [finderBusy, setFinderBusy] = useState(false);
+  const [villagesList, setVillagesList] = useState<GeoVillage[]>([]);
+  const [villagesBusy, setVillagesBusy] = useState(false);
+  const [villagesFailed, setVillagesFailed] = useState(false);
+  const [villageSuggest, setVillageSuggest] = useState(false);
+  const villagesReq = useRef(0);
+
+  // ---- map overlays (place names, borders, roads) ----
+  const [showLabels, setShowLabels] = useState(true);
 
   // ---- manual land entry (no polygon) ----
   const [manualMode, setManualMode] = useState(false);
@@ -92,6 +116,16 @@ export default function Planner() {
     api.systems().then((r) => setSystems(r.systems)).catch(() => {});
     api.crops().then((r) => setCatalogue(r.crops)).catch(() => {});
   }, []);
+
+  // Toggle the names/borders/roads overlay (Google-Maps-hybrid look).
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const vis = showLabels ? "visible" : "none";
+    for (const id of ["roads", "labels"]) {
+      if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", vis);
+    }
+  }, [showLabels]);
 
   function landCtx(): Record<string, unknown> {
     return {
@@ -369,8 +403,48 @@ export default function Planner() {
   function pickFinderState(s: string) {
     setFinderState(s); setFinderDistrict(""); setFinderResults(null);
     setDistrictsList([]);
+    setVillagesList([]); setVillagesFailed(false); setFinderVillage(""); setVillageSuggest(false);
     if (s) api.geoDistricts(s).then((r) => setDistrictsList(r.districts)).catch(() => {});
   }
+
+  function pickFinderDistrict(d: string) {
+    setFinderDistrict(d); setFinderResults(null);
+    setFinderVillage(""); setVillageSuggest(false);
+    setVillagesList([]); setVillagesFailed(false);
+    if (!d || !finderState) return;
+    // fetch the district's village directory; first load can take a few
+    // seconds (OSM Overpass), later loads are served from the API cache
+    const reqId = ++villagesReq.current;
+    setVillagesBusy(true);
+    api.geoVillages(finderState, d)
+      .then((r) => {
+        if (villagesReq.current !== reqId) return;
+        setVillagesList(r.villages);
+        setVillagesFailed(!!r.error || r.villages.length === 0);
+      })
+      .catch(() => { if (villagesReq.current === reqId) { setVillagesList([]); setVillagesFailed(true); } })
+      .finally(() => { if (villagesReq.current === reqId) setVillagesBusy(false); });
+  }
+
+  function pickVillage(v: GeoVillage) {
+    setFinderVillage(v.name); setVillageSuggest(false); setFinderResults(null);
+    map.current?.flyTo({ center: [v.lon, v.lat], zoom: 15, duration: 900 });
+  }
+
+  // Substring match first; then a consonant-skeleton pass so transliteration
+  // variants still hit (farmer types "haidergarh", data says "Haidargarh").
+  const villageMatches = (() => {
+    const strip = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const q = strip(finderVillage.trim());
+    const direct = villagesList.filter((v) => strip(v.name).includes(q));
+    if (direct.length >= 40 || q.length < 3) return direct.slice(0, 40);
+    const skel = (s: string) => s.replace(/[^bcdfghjklmnpqrstvwxyz]/g, "");
+    const qs = skel(q);
+    const fuzzy = qs
+      ? villagesList.filter((v) => !direct.includes(v) && skel(strip(v.name)).includes(qs))
+      : [];
+    return [...direct, ...fuzzy].slice(0, 40);
+  })();
 
   async function finderGo(target?: string) {
     // search the village scoped to district+state; with no village, jump to
@@ -566,6 +640,8 @@ export default function Planner() {
         </button>
         <button className={"btn btn-sm" + (finderOpen ? "" : " secondary")}
           title={t("finder.title")} onClick={openFinder}>📍</button>
+        <button className={"btn btn-sm" + (showLabels ? "" : " secondary")}
+          title={t("map.labels")} onClick={() => setShowLabels((v) => !v)}>🏷️</button>
         {searchResults !== null && (
           <div className="map-search-results">
             {searchResults.length === 0 && (
@@ -591,7 +667,7 @@ export default function Planner() {
             </select>
             <select className="lang-select finder-select" value={finderDistrict}
               disabled={!finderState}
-              onChange={(e) => { setFinderDistrict(e.target.value); setFinderResults(null); }}>
+              onChange={(e) => pickFinderDistrict(e.target.value)}>
               <option value="">{t("finder.district")}</option>
               {districtsList.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
@@ -599,13 +675,35 @@ export default function Planner() {
               <input className="input" placeholder={t("finder.village")}
                 disabled={!finderState}
                 value={finderVillage}
-                onChange={(e) => setFinderVillage(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") finderGo(); }} />
+                onChange={(e) => { setFinderVillage(e.target.value); setVillageSuggest(true); setFinderResults(null); }}
+                onFocus={() => { if (villagesList.length) setVillageSuggest(true); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setVillageSuggest(false); finderGo(); } }} />
               <button className="btn btn-sm" disabled={finderBusy || !finderState}
-                onClick={() => finderGo()}>
+                onClick={() => { setVillageSuggest(false); finderGo(); }}>
                 {finderBusy ? "…" : t("finder.go")}
               </button>
             </div>
+            {villagesBusy && (
+              <p className="disclaimer" style={{ marginTop: 6 }}>{t("finder.loadingVillages")}</p>
+            )}
+            {!villagesBusy && villagesList.length > 0 && (
+              <p className="disclaimer" style={{ marginTop: 6 }}>
+                {t("finder.villageCount", { n: villagesList.length })}
+              </p>
+            )}
+            {!villagesBusy && villagesFailed && finderDistrict !== "" && (
+              <p className="disclaimer" style={{ marginTop: 6 }}>{t("finder.noVillageList")}</p>
+            )}
+            {villageSuggest && villageMatches.length > 0 && (
+              <div className="manual-results village-list">
+                {villageMatches.map((v) => (
+                  <div className="map-search-item" key={v.name} onClick={() => pickVillage(v)}>
+                    {v.name}
+                    {v.kind && v.kind !== "village" && <span className="muted"> · {v.kind}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
             {finderResults !== null && (
               <div className="manual-results">
                 {finderResults.length === 0 && (

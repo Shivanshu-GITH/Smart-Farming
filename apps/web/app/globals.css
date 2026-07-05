@@ -254,6 +254,7 @@ html, body {
 }
 .manual-results { margin: 6px 0; border: 1px solid var(--border); border-radius: 8px;
   overflow: hidden; }
+.village-list { max-height: 220px; overflow-y: auto; }
 
 /* --- dedicated auth pages --- */
 .auth-page {

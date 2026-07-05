@@ -28,7 +28,8 @@
   "map": {
     "search": "Search village, town or place…",
     "go": "Search",
-    "noResults": "No places found"
+    "noResults": "No places found",
+    "labels": "Place names, roads & borders"
   },
   "finder": {
     "title": "Find my area — step by step",
@@ -36,7 +37,10 @@
     "district": "2 · Choose district",
     "village": "3 · Village / area name",
     "go": "Go",
-    "hint": "Pick your state and district, then type your village — the search stays inside your district so small places are found. Then zoom on the satellite image to spot your field."
+    "loadingVillages": "Loading the village list of this district…",
+    "villageCount": "{n} villages & towns in this district — type to filter, tap one to jump there",
+    "noVillageList": "Village list unavailable right now — type the name and press Go",
+    "hint": "Pick your state and district, then choose your village from the list (or type it) — the search stays inside your district so small places are found. Then zoom on the satellite image to spot your field."
   },
   "material": {
     "seed": "seed",
