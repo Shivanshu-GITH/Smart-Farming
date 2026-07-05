@@ -176,18 +176,36 @@ def build_report_pdf(ctx: dict) -> bytes:
             + (" (sampled)" if layout.get("truncated") else ""), _BODY))
 
     # 4 · Crop plans
+    if plans and plans[0].get("usable_fraction", 1.0) < 1.0:
+        p0 = plans[0]
+        story.append(Paragraph(
+            f"Planting area: {p0['planting_area_hectares']} ha of "
+            f"{p0['area_hectares']} ha ({int(p0['usable_fraction'] * 100)}% — the "
+            "rest is bunds, walking/inspection paths and irrigation lines).",
+            _MUTED))
+
     for plan in plans:
         crop = plan["crop"]
         story.append(Paragraph(
             f"Plan — {crop['name']} ({crop['layer']} layer)", _H2))
         fert = plan["fertilizer"]["total_kg"]
-        story.append(_kv_table([
+        mat = plan.get("planting_material") or {
+            "label": "seed", "unit": "kg", "quantity": plan["seed"]["quantity_kg"]}
+        mat_txt = (f"≈ {int(mat['quantity']):,} {mat['label']}"
+                   if mat["unit"] == "plants"
+                   else f"{mat['quantity']} kg {mat['label']}")
+        rows = [
             ("Plants (est.)", f"{plan['plants']['total_estimate']:,}"),
-            ("Seed quantity", f"{plan['seed']['quantity_kg']} kg"),
+            ("Planting material", mat_txt),
+        ]
+        if mat["unit"] == "plants" and plan["seed"]["quantity_kg"]:
+            rows.append(("Nursery seed", f"{plan['seed']['quantity_kg']} kg"))
+        rows += [
             ("Fertilizer (N-P-K)",
              f"{fert.get('N')} - {fert.get('P')} - {fert.get('K')} kg total"),
             ("Spacing", f"{plan['spacing_cm']['row']} × {plan['spacing_cm']['plant']} cm"),
-        ]))
+        ]
+        story.append(_kv_table(rows))
         cal = plan.get("calendar", [])
         if cal:
             data = [["Stage", "Day", "Date"]] + [

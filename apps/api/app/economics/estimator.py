@@ -9,7 +9,7 @@ All figures are planning estimates and clearly flagged as such.
 """
 from __future__ import annotations
 
-from app.agronomy.catalogue import get_crop
+from app.agronomy.catalogue import get_crop, usable_fraction
 from app.core.geo import SQM_PER_HECTARE
 
 from .catalogue import get_economics
@@ -51,8 +51,11 @@ def _crop_economics(crop_id: str, ha: float, price: float | None) -> dict | None
 
 
 def estimate(crop_ids: list[str], area_m2: float,
-             prices: dict[str, float] | None = None) -> dict:
-    ha = area_m2 / SQM_PER_HECTARE
+             prices: dict[str, float] | None = None,
+             system: str | None = None) -> dict:
+    gross_ha = area_m2 / SQM_PER_HECTARE
+    fraction = usable_fraction(system)
+    ha = gross_ha * fraction  # costs & yields scale with the planted area
     prices = prices or {}
     rows: list[dict] = []
     for cid in crop_ids:
@@ -68,7 +71,9 @@ def estimate(crop_ids: list[str], area_m2: float,
                    sum(r["margin"][1] for r in rows)],
     }
     return {
-        "area_hectares": round(ha, 4),
+        "area_hectares": round(gross_ha, 4),
+        "planting_area_hectares": round(ha, 4),
+        "usable_fraction": fraction,
         "currency": "INR",
         "crops": rows,
         "totals": totals,

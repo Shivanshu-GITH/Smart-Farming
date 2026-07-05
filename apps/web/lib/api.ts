@@ -90,9 +90,20 @@ export interface DesignResult {
   season?: string | null; count: number; stacks: DesignStack[];
 }
 
+export interface PlantingMaterial {
+  type: "seed" | "seedling" | "sucker" | "rhizome" | "sett" | "tuber";
+  label: string;
+  unit: "kg" | "plants";
+  quantity: number;
+  note?: string | null;
+}
+
 export interface PlanResult {
   crop: { id: string; name: string; layer: string };
   plants: { total_estimate: number; per_hectare: number };
+  planting_material?: PlantingMaterial;
+  planting_area_hectares?: number;
+  usable_fraction?: number;
   seed: { quantity_kg: number };
   fertilizer: { total_kg: Record<string, number> };
   calendar: { stage: string; day: number; date: string }[];
@@ -132,7 +143,10 @@ export interface EconCrop {
   price_per_kg: number; price_source: string;
 }
 export interface EconomicsResult {
-  area_hectares: number; currency: string;
+  area_hectares: number;
+  planting_area_hectares?: number;
+  usable_fraction?: number;
+  currency: string;
   crops: EconCrop[];
   totals: { cost: number; revenue: [number, number]; margin: [number, number] };
   layers: number; disclaimer: string;
@@ -170,8 +184,17 @@ export const api = {
 
   systems: () => get<{ systems: FarmingSystem[] }>("/agronomy/systems"),
 
-  geoSearch: (q: string) =>
-    get<{ results: GeoResult[] }>(`/geo/search?q=${encodeURIComponent(q)}`),
+  geoSearch: (q: string, scope?: { state?: string; district?: string }) => {
+    const p = new URLSearchParams({ q });
+    if (scope?.state) p.set("state", scope.state);
+    if (scope?.district) p.set("district", scope.district);
+    return get<{ results: GeoResult[] }>(`/geo/search?${p.toString()}`);
+  },
+
+  geoStates: () => get<{ states: string[] }>("/geo/states"),
+
+  geoDistricts: (state: string) =>
+    get<{ districts: string[] }>(`/geo/districts?state=${encodeURIComponent(state)}`),
 
   googleAuth: (credential: string) =>
     post<{ access_token: string; token_type: string; user: User }>(
@@ -189,16 +212,16 @@ export const api = {
   design: (ctx: Record<string, unknown>) =>
     post<DesignResult>("/agronomy/design", ctx),
 
-  plan: (crop_id: string, area_m2: number) =>
-    post<PlanResult>("/agronomy/plan", { crop_id, area_m2 }),
+  plan: (crop_id: string, area_m2: number, system?: string) =>
+    post<PlanResult>("/agronomy/plan", { crop_id, area_m2, system }),
 
   advisoryStatus: () => get<{ configured: boolean }>("/advisory/status"),
 
   advisoryChat: (messages: ChatMessage[], context: unknown) =>
     post<{ reply: string }>("/advisory/chat", { messages, context }),
 
-  economics: (crop_ids: string[], area_m2: number, state?: string) =>
-    post<EconomicsResult>("/economics/estimate", { crop_ids, area_m2, state }),
+  economics: (crop_ids: string[], area_m2: number, state?: string, system?: string) =>
+    post<EconomicsResult>("/economics/estimate", { crop_ids, area_m2, state, system }),
 
   diagnose: (image_base64: string, media_type: string, note?: string, context?: unknown) =>
     post<{ reply: string }>("/advisory/diagnose", { image_base64, media_type, note, context }),
@@ -221,11 +244,11 @@ export const api = {
   saveLayout: (fieldId: string, data: unknown) =>
     post<{ id: string }>(`/fields/${fieldId}/layouts`, { data }, true),
 
-  reportPdf: async (geometry: Geometry, crop_ids: string[]): Promise<Blob> => {
+  reportPdf: async (geometry: Geometry, crop_ids: string[], system = "multilayer"): Promise<Blob> => {
     const res = await fetch(`${BASE}/reports/pdf`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ geometry, crop_ids }),
+      body: JSON.stringify({ geometry, crop_ids, system }),
     });
     if (!res.ok) throw new Error(`/reports/pdf -> ${res.status}`);
     return res.blob();

@@ -47,12 +47,13 @@ def recommend_crops(q: RecommendQuery) -> dict:
 class PlanQuery(BaseModel):
     crop_id: str
     area_m2: float
+    system: str | None = None  # scales quantities to the system's planting area
 
 
 @router.post("/plan")
 def crop_plan(q: PlanQuery) -> dict:
     try:
-        return build_plan(q.crop_id, q.area_m2)
+        return build_plan(q.crop_id, q.area_m2, system=q.system)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

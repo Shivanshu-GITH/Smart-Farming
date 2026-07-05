@@ -42,6 +42,35 @@ def crop_systems(crop: dict) -> list[str]:
     return crop.get("systems", list(_ALL_SYSTEMS))
 
 
+def usable_fraction(system: str | None) -> float:
+    """Share of gross land actually planted for a farming system — the rest is
+    bunds, walking/inspection paths and irrigation lines. 1.0 when unknown."""
+    if not system:
+        return 1.0
+    for s in load_systems():
+        if s["id"] == system:
+            return float(s.get("usable_area_fraction", 1.0))
+    return 1.0
+
+
+# How each crop is actually planted. crops.json can override per crop with a
+# "propagation" key; this table is the curated default.
+_PROPAGATION: dict[str, str] = {
+    "turmeric": "rhizome", "ginger": "rhizome",
+    "banana": "sucker",
+    "papaya": "seedling", "drumstick": "seedling", "tomato": "seedling",
+    "brinjal": "seedling", "chilli": "seedling", "onion": "seedling",
+    "paddy": "seedling",
+    "sugarcane": "sett",
+    "potato": "tuber",
+}
+
+
+def propagation(crop: dict) -> str:
+    """seed | seedling | sucker | rhizome | sett | tuber"""
+    return crop.get("propagation") or _PROPAGATION.get(crop["id"], "seed")
+
+
 def crops_for_system(system: str | None) -> list[dict]:
     if not system:
         return all_crops()

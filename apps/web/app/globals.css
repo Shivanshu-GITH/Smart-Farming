@@ -228,6 +228,13 @@ html, body {
 .map-search-item:last-child { border-bottom: none; }
 .map-search-item:hover { background: #15241a; }
 .map-search-item.muted { color: var(--muted); cursor: default; }
+.finder-panel {
+  position: absolute; top: 40px; left: 0; width: 340px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+}
+.finder-select { width: 100%; margin-bottom: 6px; padding: 8px; font-size: 13px; }
+.finder-select:disabled { opacity: .5; }
 
 /* --- farming system selector + full crop catalogue --- */
 .sys-row { display: flex; gap: 6px; margin-bottom: 8px; }

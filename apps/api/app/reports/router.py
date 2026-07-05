@@ -13,13 +13,14 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 class ReportRequest(BaseModel):
     geometry: GeoJSONGeometry
     crop_ids: list[str] = []
+    system: str = "multilayer"
 
 
 @router.post("/pdf")
 async def report_pdf(req: ReportRequest) -> Response:
     """Generate a downloadable PDF report (field + land intel + crop plans)."""
     try:
-        pdf = await generate_report(req.geometry.model_dump(), req.crop_ids)
+        pdf = await generate_report(req.geometry.model_dump(), req.crop_ids, req.system)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(

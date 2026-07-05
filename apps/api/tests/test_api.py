@@ -50,6 +50,22 @@ def test_geo_search_validates_query():
     assert client.get("/geo/search", params={"q": "a"}).status_code == 422  # too short
 
 
+def test_layered_location_finder():
+    states = client.get("/geo/states").json()["states"]
+    assert len(states) == 36 and "Uttar Pradesh" in states
+    up = client.get("/geo/districts", params={"state": "uttar pradesh"}).json()
+    assert len(up["districts"]) == 75 and "Barabanki" in up["districts"]
+    assert client.get("/geo/districts", params={"state": "Nowhere"}).status_code == 404
+
+
+def test_economics_scales_to_planting_area():
+    body = {"crop_ids": ["banana"], "area_m2": 10000, "use_mandi": False}
+    gross = client.post("/economics/estimate", json=body).json()
+    ml = client.post("/economics/estimate", json={**body, "system": "multilayer"}).json()
+    assert ml["usable_fraction"] == 0.8
+    assert ml["totals"]["cost"] == pytest.approx(gross["totals"]["cost"] * 0.8, rel=0.01)
+
+
 def test_validate_endpoint():
     r = client.post("/agronomy/validate", json={"crop_ids": ["tomato", "spinach"]})
     assert r.status_code == 200

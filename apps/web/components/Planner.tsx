@@ -69,6 +69,16 @@ export default function Planner() {
   const [searchResults, setSearchResults] = useState<GeoResult[] | null>(null);
   const [searching, setSearching] = useState(false);
 
+  // ---- layered location finder (state → district → village) ----
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [statesList, setStatesList] = useState<string[]>([]);
+  const [districtsList, setDistrictsList] = useState<string[]>([]);
+  const [finderState, setFinderState] = useState("");
+  const [finderDistrict, setFinderDistrict] = useState("");
+  const [finderVillage, setFinderVillage] = useState("");
+  const [finderResults, setFinderResults] = useState<GeoResult[] | null>(null);
+  const [finderBusy, setFinderBusy] = useState(false);
+
   // ---- manual land entry (no polygon) ----
   const [manualMode, setManualMode] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -337,6 +347,7 @@ export default function Planner() {
 
   function gotoResult(r: GeoResult) {
     setSearchResults(null);
+    setFinderResults(null);
     setSearchQ(r.display_name.split(",")[0]);
     if (!map.current) return;
     if (r.bbox) {
@@ -344,6 +355,40 @@ export default function Planner() {
       map.current.fitBounds([[w, s], [e, n]], { padding: 60, duration: 900, maxZoom: 16 });
     } else {
       map.current.flyTo({ center: [r.lon, r.lat], zoom: 15, duration: 900 });
+    }
+  }
+
+  // ---- layered finder helpers ----
+  function openFinder() {
+    setFinderOpen((o) => !o);
+    if (!statesList.length) {
+      api.geoStates().then((r) => setStatesList(r.states)).catch(() => {});
+    }
+  }
+
+  function pickFinderState(s: string) {
+    setFinderState(s); setFinderDistrict(""); setFinderResults(null);
+    setDistrictsList([]);
+    if (s) api.geoDistricts(s).then((r) => setDistrictsList(r.districts)).catch(() => {});
+  }
+
+  async function finderGo(target?: string) {
+    // search the village scoped to district+state; with no village, jump to
+    // the district (or state) itself
+    const q = (target ?? finderVillage).trim() || finderDistrict || finderState;
+    if (!q) return;
+    setFinderBusy(true);
+    try {
+      const r = await api.geoSearch(q, {
+        state: finderState || undefined,
+        district: q === finderDistrict ? undefined : (finderDistrict || undefined),
+      });
+      if (r.results.length === 1) gotoResult(r.results[0]);
+      else setFinderResults(r.results);
+    } catch {
+      setFinderResults([]);
+    } finally {
+      setFinderBusy(false);
     }
   }
 
@@ -419,9 +464,9 @@ export default function Planner() {
     setBusy("Preparing crop plan…");
     try {
       const ps = await Promise.all(
-        selected.map((id) => api.plan(id, areaM2).catch(() => null)));
+        selected.map((id) => api.plan(id, areaM2, system).catch(() => null)));
       setPlans(ps.filter((p): p is PlanResult => p !== null));
-      api.economics(selected, areaM2, summary?.region?.state)
+      api.economics(selected, areaM2, summary?.region?.state, system)
         .then(setEconomics).catch(() => setEconomics(null));
     } finally {
       setBusy(null);
@@ -451,14 +496,14 @@ export default function Planner() {
     try {
       const res = await api.layout(geometry, selected, system);
       setLayout(res);
-      // Fetch per-crop plans (seed / fertiliser / calendar) for the summary.
+      // Fetch per-crop plans (planting material / fertiliser / calendar).
       const areaM2 = summary?.area.square_meters ?? 0;
       const ps = await Promise.all(
-        selected.map((id) => api.plan(id, areaM2).catch(() => null)));
+        selected.map((id) => api.plan(id, areaM2, system).catch(() => null)));
       setPlans(ps.filter((p): p is PlanResult => p !== null));
       // Cost / revenue / profit estimate (mandi prices when available).
       const state = summary?.region?.state;
-      api.economics(selected, areaM2, state).then(setEconomics).catch(() => setEconomics(null));
+      api.economics(selected, areaM2, state, system).then(setEconomics).catch(() => setEconomics(null));
       if (map.current) {
         (map.current.getSource("plants") as any)?.setData(res.planting_points);
         const heatFC = {
@@ -490,7 +535,7 @@ export default function Planner() {
     if (!geometry) return;
     setPdfBusy(true);
     try {
-      const blob = await api.reportPdf(geometry, selected);
+      const blob = await api.reportPdf(geometry, selected, system);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -519,6 +564,8 @@ export default function Planner() {
           onClick={doSearch}>
           {searching ? "…" : "🔍"}
         </button>
+        <button className={"btn btn-sm" + (finderOpen ? "" : " secondary")}
+          title={t("finder.title")} onClick={openFinder}>📍</button>
         {searchResults !== null && (
           <div className="map-search-results">
             {searchResults.length === 0 && (
@@ -529,6 +576,49 @@ export default function Planner() {
                 {r.display_name}
               </div>
             ))}
+          </div>
+        )}
+
+        {finderOpen && (
+          <div className="finder-panel">
+            <p className="hint" style={{ fontWeight: 600, margin: "0 0 6px" }}>
+              {t("finder.title")}
+            </p>
+            <select className="lang-select finder-select" value={finderState}
+              onChange={(e) => pickFinderState(e.target.value)}>
+              <option value="">{t("finder.state")}</option>
+              {statesList.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="lang-select finder-select" value={finderDistrict}
+              disabled={!finderState}
+              onChange={(e) => { setFinderDistrict(e.target.value); setFinderResults(null); }}>
+              <option value="">{t("finder.district")}</option>
+              {districtsList.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <div className="save-row" style={{ marginTop: 6 }}>
+              <input className="input" placeholder={t("finder.village")}
+                disabled={!finderState}
+                value={finderVillage}
+                onChange={(e) => setFinderVillage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") finderGo(); }} />
+              <button className="btn btn-sm" disabled={finderBusy || !finderState}
+                onClick={() => finderGo()}>
+                {finderBusy ? "…" : t("finder.go")}
+              </button>
+            </div>
+            {finderResults !== null && (
+              <div className="manual-results">
+                {finderResults.length === 0 && (
+                  <div className="map-search-item muted">{t("map.noResults")}</div>
+                )}
+                {finderResults.map((r, i) => (
+                  <div className="map-search-item" key={i} onClick={() => gotoResult(r)}>
+                    {r.display_name}
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="disclaimer" style={{ marginTop: 6 }}>{t("finder.hint")}</p>
           </div>
         )}
       </div>
@@ -871,7 +961,7 @@ export default function Planner() {
                   <details className="cal-crop" key={p.crop.id}>
                     <summary>
                       <span className="dot" style={{ background: LAYER_COLORS[p.crop.layer] }} />
-                      {p.crop.name} · {p.seed.quantity_kg} kg {t("layout.seed")} ·
+                      {p.crop.name} · {materialLine(p, t)} ·
                       N{p.fertilizer.total_kg.N}-P{p.fertilizer.total_kg.P}-K{p.fertilizer.total_kg.K}
                     </summary>
                     {p.calendar.map((s) => (
@@ -942,6 +1032,14 @@ export default function Planner() {
                 {t("profit.multiLayer", { n: economics.layers })}
               </p>
             )}
+            {economics.usable_fraction != null && economics.usable_fraction < 1 && (
+              <p className="hint" style={{ marginTop: 6 }}>
+                {t("profit.usableArea", {
+                  pct: Math.round(economics.usable_fraction * 100),
+                  planted: economics.planting_area_hectares ?? 0,
+                })}
+              </p>
+            )}
             <p className="disclaimer">{economics.disclaimer}</p>
           </div>
         )}
@@ -981,6 +1079,16 @@ function sparkline(values: number[]): React.ReactNode {
 function inr(n: number): string {
   const sign = n < 0 ? "-" : "";
   return `${sign}₹${Math.abs(Math.round(n)).toLocaleString("en-IN")}`;
+}
+
+/** "≈ 2,100 suckers" / "2,000 kg rhizomes" / "95 kg seed" for a crop plan. */
+function materialLine(p: PlanResult, t: (k: string) => string): string {
+  const m = p.planting_material;
+  if (!m) return `${p.seed.quantity_kg} kg ${t("material.seed")}`;
+  if (m.unit === "plants") {
+    return `≈ ${Math.round(m.quantity).toLocaleString("en-IN")} ${t(`material.${m.type}`)}`;
+  }
+  return `${m.quantity} kg ${t(`material.${m.type}`)}`;
 }
 
 function emptyFC() {

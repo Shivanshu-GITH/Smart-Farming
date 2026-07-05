@@ -1,12 +1,14 @@
 {
   "schema_version": 1,
-  "note": "Farming systems a farmer can choose. crops_min/crops_max bound the selection; the layout engine renders each system differently.",
+  "note": "Farming systems a farmer can choose. crops_min/crops_max bound the selection; the layout engine renders each system differently. usable_area_fraction is the share of gross land actually planted after field bunds/borders, walking & inspection paths and irrigation lines — plant counts, inputs and economics scale to it.",
   "systems": [
     {
       "id": "monoculture",
       "name": "Single crop",
       "crops_min": 1,
       "crops_max": 1,
+      "usable_area_fraction": 0.95,
+      "area_note": "~5% reserved for field bunds, borders and turning space.",
       "description": "One crop across the whole field — paddy, wheat, cotton and other traditional field crops. Simplest to manage and mechanise.",
       "best_for": "Staple grains, assured-irrigation fields, mechanised farms"
     },
@@ -15,6 +17,8 @@
       "name": "Intercropping",
       "crops_min": 2,
       "crops_max": 3,
+      "usable_area_fraction": 0.92,
+      "area_note": "~8% reserved for bunds, access rows and irrigation channels.",
       "description": "Two or three crops in alternating row bands (e.g. 2 rows maize : 1 row soybean). Spreads risk and improves per-acre income; legume partners add nitrogen.",
       "best_for": "Rain-fed fields, risk reduction, soil health"
     },
@@ -23,6 +27,8 @@
       "name": "Multi-layer farming",
       "crops_min": 2,
       "crops_max": 5,
+      "usable_area_fraction": 0.80,
+      "area_note": "~20% reserved for walking/inspection paths, drip lines and working space between beds.",
       "description": "Up to five vertical layers — canopy fruit trees, climbers, bushy vegetables, leafy ground cover and root crops sharing the same land. Highest income per acre; more labour and know-how.",
       "best_for": "Small holdings, horticulture belts, maximum revenue per acre"
     }

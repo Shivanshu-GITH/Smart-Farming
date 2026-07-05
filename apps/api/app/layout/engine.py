@@ -26,7 +26,7 @@ from typing import Callable
 from shapely.geometry import Point
 from shapely.prepared import prep
 
-from app.agronomy.catalogue import get_crop, layers
+from app.agronomy.catalogue import get_crop, layers, usable_fraction
 from app.core.geo import centroid_latlon, geodesic_area_m2, polygon_from_geojson
 
 # Rendering cap per crop. Grids denser than this are uniformly thinned so the
@@ -107,8 +107,15 @@ def _place_monoculture(polygon, crops: list[dict], lat: float):
     return [(crop, pts, s, 1.0)]
 
 
+# Multilayer working corridors: an E-W walking/drip path of PATH_M every
+# BLOCK_M of field depth, rendered as visible gaps in the understory.
+_BLOCK_M = 12.0
+_PATH_M = 1.2
+
+
 def _place_multilayer(polygon, crops: list[dict], lat: float):
-    """Canopy first on a square grid; lower layers interleave between trees."""
+    """Canopy first on a square grid; lower layers interleave between trees and
+    leave walking corridors every ~12 m."""
     ordered = sorted(crops, key=_layer_rank, reverse=True)  # top layer first
     m_lon, m_lat = _meters_per_degree(lat)
     minx, miny, _, _ = polygon.bounds
@@ -126,18 +133,21 @@ def _place_multilayer(polygon, crops: list[dict], lat: float):
         ox, oy = sx * phase, sy * phase
 
         keep = None
-        if tree is not None and not is_canopy:
-            tsx, tsy = tree["sx"], tree["sy"]
-            tox, toy = tree["ox"], tree["oy"]
-            clear2 = tree["clear_m"] ** 2
+        if not is_canopy:
+            tree_ctx = tree
 
-            def keep(x: float, y: float,
-                     tsx=tsx, tsy=tsy, tox=tox, toy=toy, clear2=clear2) -> bool:
-                dx = (x - tox) % tsx
-                dx = min(dx, tsx - dx) * m_lon
-                dy = (y - toy) % tsy
-                dy = min(dy, tsy - dy) * m_lat
-                return dx * dx + dy * dy >= clear2
+            def keep(x: float, y: float, tree_ctx=tree_ctx) -> bool:
+                # walking corridor bands (canopy trees span them; understory not)
+                if ((y - miny) * m_lat) % _BLOCK_M < _PATH_M:
+                    return False
+                if tree_ctx is not None:
+                    dx = (x - tree_ctx["ox"]) % tree_ctx["sx"]
+                    dx = min(dx, tree_ctx["sx"] - dx) * m_lon
+                    dy = (y - tree_ctx["oy"]) % tree_ctx["sy"]
+                    dy = min(dy, tree_ctx["sy"] - dy) * m_lat
+                    if dx * dx + dy * dy < tree_ctx["clear_m"] ** 2:
+                        return False
+                return True
 
         pts = _scan(polygon, sx, sy, ox, oy, stagger=not is_canopy, keep=keep)
 
@@ -200,7 +210,10 @@ def generate_layout(geometry: dict, crop_ids: list[str],
 
     polygon = polygon_from_geojson(geometry)
     lat, _ = centroid_latlon(polygon)
-    area_m2 = geodesic_area_m2(polygon)
+    # plant counts are computed on the PLANTING area (gross minus bunds, paths
+    # and irrigation space for this system), not the gross polygon area
+    fraction = usable_fraction(system)
+    area_m2 = geodesic_area_m2(polygon) * fraction
 
     crops = [c for c in (get_crop(cid) for cid in crop_ids) if c is not None]
     if system == "monoculture":
@@ -245,6 +258,7 @@ def generate_layout(geometry: dict, crop_ids: list[str],
     return {
         "type": "layout",
         "system": system,
+        "usable_fraction": fraction,
         "crops": per_crop,
         "total_plants": sum(c["plant_count"] for c in per_crop),
         "rendered_points": len(features),

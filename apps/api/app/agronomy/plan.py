@@ -1,13 +1,32 @@
 """Turns a crop choice + field area into a concrete agronomic plan:
-seed quantity, fertilizer totals, plant count and a stage-based crop calendar.
+planting material (seed / seedlings / suckers / rhizomes / setts / tubers),
+fertilizer totals, plant count and a stage-based crop calendar.
+
+When a farming ``system`` is given, quantities are computed on the *planting*
+area — gross land minus the share reserved for bunds, walking/inspection paths
+and irrigation lines (see systems.json usable_area_fraction).
 """
 from __future__ import annotations
 
 import datetime as dt
+import math
 
 from app.core.geo import SQM_PER_HECTARE
 
-from .catalogue import get_crop
+from .catalogue import get_crop, propagation, usable_fraction
+
+# Extra planting material over the theoretical count, for nursery losses and
+# gap filling — standard practice.
+_MATERIAL_BUFFER = 1.05
+
+_MATERIAL_LABELS = {
+    "seed": "seed",
+    "seedling": "seedlings (nursery-raised)",
+    "sucker": "suckers / tissue-culture plantlets",
+    "rhizome": "seed rhizomes",
+    "sett": "three-bud setts",
+    "tuber": "seed tubers",
+}
 
 
 def plants_per_hectare(crop: dict) -> int:
@@ -18,31 +37,68 @@ def plants_per_hectare(crop: dict) -> int:
     return int(SQM_PER_HECTARE / (row * plant))
 
 
-def build_plan(crop_id: str, area_m2: float,
-               start: dt.date | None = None) -> dict:
+def _planting_material(crop: dict, plant_count: int, seed_qty: float) -> dict:
+    """What the farmer actually has to buy/raise, in the right unit."""
+    prop = propagation(crop)
+    if prop in ("seedling", "sucker"):
+        return {
+            "type": prop,
+            "label": _MATERIAL_LABELS[prop],
+            "unit": "plants",
+            "quantity": int(math.ceil(plant_count * _MATERIAL_BUFFER)),
+            "note": "Includes ~5% extra for nursery losses and gap filling."
+                    + (" Nursery seed requirement shown separately."
+                       if crop.get("seed_rate_kg_per_ha") else ""),
+        }
+    if prop in ("rhizome", "sett", "tuber"):
+        return {
+            "type": prop,
+            "label": _MATERIAL_LABELS[prop],
+            "unit": "kg",
+            "quantity": seed_qty,
+            "note": crop.get("plants_note"),
+        }
+    return {
+        "type": "seed",
+        "label": _MATERIAL_LABELS["seed"],
+        "unit": "kg",
+        "quantity": seed_qty,
+        "note": crop.get("plants_note"),
+    }
+
+
+def build_plan(crop_id: str, area_m2: float, start: dt.date | None = None,
+               system: str | None = None) -> dict:
     crop = get_crop(crop_id)
     if crop is None:
         raise ValueError(f"Unknown crop '{crop_id}'")
 
-    hectares = area_m2 / SQM_PER_HECTARE
+    gross_ha = area_m2 / SQM_PER_HECTARE
+    fraction = usable_fraction(system)
+    planting_ha = gross_ha * fraction
+
     pph = plants_per_hectare(crop)
-    plant_count = int(pph * hectares)
+    plant_count = int(pph * planting_ha)
 
     seed_rate = crop.get("seed_rate_kg_per_ha", 0) or 0
-    seed_qty = round(seed_rate * hectares, 2)
+    seed_qty = round(seed_rate * planting_ha, 2)
 
     npk = crop["fertilizer_npk_kg_ha"]
-    fert_total = {k: round(v * hectares, 1) for k, v in npk.items()}
+    fert_total = {k: round(v * planting_ha, 1) for k, v in npk.items()}
 
     return {
         "crop": {"id": crop["id"], "name": crop["name"], "layer": crop["layer"]},
-        "area_hectares": round(hectares, 4),
+        "system": system,
+        "area_hectares": round(gross_ha, 4),
+        "planting_area_hectares": round(planting_ha, 4),
+        "usable_fraction": fraction,
         "spacing_cm": crop["spacing_cm"],
         "plants": {
             "per_hectare": pph,
             "total_estimate": plant_count,
             "note": crop.get("plants_note"),
         },
+        "planting_material": _planting_material(crop, plant_count, seed_qty),
         "seed": {
             "rate_kg_per_ha": seed_rate,
             "quantity_kg": seed_qty,

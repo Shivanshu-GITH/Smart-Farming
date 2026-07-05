@@ -19,7 +19,8 @@ from app.layout.engine import generate_layout
 from .pdf import build_report_pdf
 
 
-async def generate_report(geometry: dict, crop_ids: list[str]) -> bytes:
+async def generate_report(geometry: dict, crop_ids: list[str],
+                          system: str = "multilayer") -> bytes:
     summary = await summarize_field(geometry)
     lat = summary["centroid"]["lat"]
     lon = summary["centroid"]["lon"]
@@ -34,11 +35,11 @@ async def generate_report(geometry: dict, crop_ids: list[str]) -> bytes:
     plans = []
     for cid in crop_ids:
         try:
-            plans.append(build_plan(cid, area_m2))
+            plans.append(build_plan(cid, area_m2, system=system))
         except ValueError:
             continue  # unknown crop id — skip rather than fail the whole report
 
-    layout = generate_layout(geometry, crop_ids) if crop_ids else None
+    layout = generate_layout(geometry, crop_ids, system) if crop_ids else None
 
     economics = None
     if crop_ids:
@@ -49,7 +50,7 @@ async def generate_report(geometry: dict, crop_ids: list[str]) -> bytes:
             for cid, info in price_info.items()
             if info.get("source") == "mandi" and info.get("price_per_kg") is not None
         }
-        economics = estimate(crop_ids, area_m2, prices)
+        economics = estimate(crop_ids, area_m2, prices, system=system)
 
     context = {
         "summary": summary,

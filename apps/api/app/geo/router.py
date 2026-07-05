@@ -1,13 +1,20 @@
-"""Location search (forward geocoding) so a farmer can find their village/field.
+"""Location search so a farmer can find their village/field.
 
-Proxies OSM Nominatim's search API (free; requires a User-Agent and modest
-rate use — results are cached). India-biased by default since the product is
-pan-India, but the bias can be lifted with ``india_only=false``.
+Two complementary paths:
+- Layered finder: bundled all-India states/districts (GET /geo/states,
+  /geo/districts) narrow the free-text village search to one district, which
+  makes small-place names resolvable.
+- Free-text search: proxies OSM Nominatim (free; needs a User-Agent and modest
+  rate use — results are cached). India-biased by default.
 """
 from __future__ import annotations
 
+import json
+from functools import lru_cache
+from pathlib import Path
+
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.core import cache
 
@@ -16,18 +23,50 @@ router = APIRouter(prefix="/geo", tags=["geo"])
 NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
 _HEADERS = {"User-Agent": "SmartFarm/1.0 (precision-farm-planning)"}
 
+# apps/api/app/geo/router.py -> repo root is 4 levels up
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_PLACES_DB = _REPO_ROOT / "packages" / "india-geo" / "states-districts.json"
+
+
+@lru_cache
+def _places() -> dict:
+    with _PLACES_DB.open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+@router.get("/states")
+def states() -> dict:
+    """All Indian states/UTs for the layered location finder."""
+    return {"states": [s["name"] for s in _places()["states"]]}
+
+
+@router.get("/districts")
+def districts(state: str = Query(min_length=2, max_length=80)) -> dict:
+    """Districts of one state/UT."""
+    for s in _places()["states"]:
+        if s["name"].lower() == state.strip().lower():
+            return {"state": s["name"], "districts": s["districts"]}
+    raise HTTPException(status_code=404, detail=f"Unknown state '{state}'")
+
 
 @router.get("/search")
 async def search(q: str = Query(min_length=2, max_length=200),
                  limit: int = Query(default=5, ge=1, le=10),
+                 state: str | None = Query(default=None, max_length=80),
+                 district: str | None = Query(default=None, max_length=80),
                  india_only: bool = True) -> dict:
-    key = f"geosearch:{q.strip().lower()}:{limit}:{india_only}"
+    """Free-text place search. When ``state``/``district`` are given the query
+    is scoped to them, so tiny villages resolve instead of drowning in
+    same-named places elsewhere."""
+    scoped_q = ", ".join(p for p in [q.strip(), (district or "").strip(),
+                                     (state or "").strip()] if p)
+    key = f"geosearch:{scoped_q.lower()}:{limit}:{india_only}"
     cached = await cache.get(key)
     if cached is not None:
         return cached
 
     params = {
-        "q": q.strip(),
+        "q": scoped_q,
         "format": "jsonv2",
         "limit": str(limit),
         "addressdetails": "0",

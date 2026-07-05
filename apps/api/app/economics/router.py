@@ -13,6 +13,7 @@ class EstimateRequest(BaseModel):
     crop_ids: list[str] = Field(min_length=1)
     area_m2: float = Field(gt=0)
     state: str | None = None
+    system: str | None = None  # scales to the system's planting area
     use_mandi: bool = True
 
 
@@ -33,7 +34,7 @@ async def estimate_economics(req: EstimateRequest) -> dict:
             if info.get("source") == "mandi" and info.get("price_per_kg") is not None
         }
 
-    result = estimate(req.crop_ids, req.area_m2, prices)
+    result = estimate(req.crop_ids, req.area_m2, prices, system=req.system)
     result["prices"] = price_info
     return result
 

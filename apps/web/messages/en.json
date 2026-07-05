@@ -30,6 +30,22 @@
     "go": "Search",
     "noResults": "No places found"
   },
+  "finder": {
+    "title": "Find my area — step by step",
+    "state": "1 · Choose state",
+    "district": "2 · Choose district",
+    "village": "3 · Village / area name",
+    "go": "Go",
+    "hint": "Pick your state and district, then type your village — the search stays inside your district so small places are found. Then zoom on the satellite image to spot your field."
+  },
+  "material": {
+    "seed": "seed",
+    "seedling": "seedlings",
+    "sucker": "suckers",
+    "rhizome": "seed rhizomes",
+    "sett": "cane setts",
+    "tuber": "seed tubers"
+  },
   "method": {
     "title": "3 · Farming method & crops",
     "tabRecommended": "Recommended",
@@ -91,7 +107,8 @@
   "profit": {
     "title": "5 · Profit estimate", "inputCost": "Total input cost",
     "revenue": "Est. revenue", "netProfit": "Net profit / season",
-    "multiLayer": "{n} layers on the same land — multi-layer stacks lift revenue per acre while sharing land cost."
+    "multiLayer": "{n} layers on the same land — multi-layer stacks lift revenue per acre while sharing land cost.",
+    "usableArea": "Computed on {planted} ha actually planted ({pct}% of the land) — the rest is bunds, walking/inspection paths and irrigation lines."
   },
   "schemes": { "title": "🏛️ Schemes & help" },
   "monitor": {

@@ -69,3 +69,35 @@ def test_build_plan_numbers():
 def test_build_plan_unknown_crop_raises():
     with pytest.raises(ValueError):
         build_plan("does-not-exist", 10_000.0)
+
+
+def test_usable_area_scales_quantities():
+    # multilayer keeps 80% for planting; the rest is paths/drip/bunds
+    p = build_plan("banana", 10_000.0, system="multilayer")
+    assert p["usable_fraction"] == 0.8
+    assert p["planting_area_hectares"] == pytest.approx(0.8)
+    assert p["plants"]["total_estimate"] == int(2500 * 0.8)  # 2x2 m grid
+    # without a system nothing changes (backwards compatible)
+    p2 = build_plan("banana", 10_000.0)
+    assert p2["usable_fraction"] == 1.0
+    assert p2["plants"]["total_estimate"] == 2500
+
+
+def test_planting_material_types():
+    banana = build_plan("banana", 10_000.0, system="multilayer")["planting_material"]
+    assert banana["type"] == "sucker" and banana["unit"] == "plants"
+    assert banana["quantity"] == int(2500 * 0.8 * 1.05)  # +5% buffer
+
+    turmeric = build_plan("turmeric", 10_000.0)["planting_material"]
+    assert turmeric["type"] == "rhizome" and turmeric["unit"] == "kg"
+    assert turmeric["quantity"] == pytest.approx(2500.0)
+
+    tomato = build_plan("tomato", 10_000.0)["planting_material"]
+    assert tomato["type"] == "seedling" and tomato["unit"] == "plants"
+
+    wheat = build_plan("wheat", 10_000.0)["planting_material"]
+    assert wheat["type"] == "seed" and wheat["unit"] == "kg"
+    assert wheat["quantity"] == pytest.approx(100.0)
+
+    sugarcane = build_plan("sugarcane", 10_000.0)["planting_material"]
+    assert sugarcane["type"] == "sett" and sugarcane["unit"] == "kg"
