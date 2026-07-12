@@ -18,10 +18,12 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+import anyio.to_thread
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.core import cache
+from app.core.ratelimit import limiter
 
 router = APIRouter(prefix="/geo", tags=["geo"])
 
@@ -43,8 +45,14 @@ _PLACES_DB = _REPO_ROOT / "packages" / "india-geo" / "states-districts.json"
 # Per-state village index built from the GeoNames dump (CC BY 4.0) by
 # packages/india-geo/build_villages.py — ~550k populated places.
 _VILLAGES_DIR = _REPO_ROOT / "packages" / "india-geo" / "villages"
+# Offline district bounding boxes (build_district_bboxes.py) so the village
+# picker never depends on a live geocoding call.
+_BBOXES_DB = _REPO_ROOT / "packages" / "india-geo" / "district-bboxes.json"
 _VILLAGE_KINDS = {"v": "village", "t": "town"}
 _MAX_VILLAGES = 12_000
+
+# These datasets change on rebuild, not per request — let browsers cache them.
+_CACHE_DAY = "public, max-age=86400"
 
 
 @lru_cache
@@ -53,17 +61,36 @@ def _places() -> dict:
         return json.load(fh)
 
 
+@lru_cache
+def _district_bboxes() -> dict:
+    """Bundled district -> [S, N, W, E], lower-cased keys. {} if not built."""
+    if not _BBOXES_DB.exists():
+        return {}
+    with _BBOXES_DB.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+    return {s.lower(): {d.lower(): bbox for d, bbox in districts.items()}
+            for s, districts in data.get("states", {}).items()}
+
+
+def _bundled_bbox(state: str, district: str) -> list[float] | None:
+    return _district_bboxes().get(state.strip().lower(), {}).get(
+        district.strip().lower())
+
+
 @router.get("/states")
-def states() -> dict:
+def states(response: Response) -> dict:
     """All Indian states/UTs for the layered location finder."""
+    response.headers["Cache-Control"] = _CACHE_DAY
     return {"states": [s["name"] for s in _places()["states"]]}
 
 
 @router.get("/districts")
-def districts(state: str = Query(min_length=2, max_length=80)) -> dict:
+def districts(response: Response,
+              state: str = Query(min_length=2, max_length=80)) -> dict:
     """Districts of one state/UT."""
     for s in _places()["states"]:
         if s["name"].lower() == state.strip().lower():
+            response.headers["Cache-Control"] = _CACHE_DAY
             return {"state": s["name"], "districts": s["districts"]}
     raise HTTPException(status_code=404, detail=f"Unknown state '{state}'")
 
@@ -156,31 +183,44 @@ async def _overpass(query: str) -> list[dict] | None:
 
 
 @router.get("/villages")
-async def villages(state: str = Query(min_length=2, max_length=80),
+async def villages(response: Response,
+                   state: str = Query(min_length=2, max_length=80),
                    district: str = Query(min_length=2, max_length=80)) -> dict:
     """Every named village/town of a district, with coordinates so the map
     can jump straight to a picked village without another geocoding trip.
 
     Primary source: the bundled GeoNames index (~550k Indian places),
-    filtered by the district's bounding box — bbox filtering keeps working
-    for districts carved out after the source data's admin split (the box
-    just also catches some villages of neighbouring districts, which is
-    harmless in a picker). Falls back to live OSM Overpass, then to an
-    ``error`` payload (HTTP 200) so the UI degrades to free-text search.
+    filtered by the district's bounding box. The bbox comes from the bundled
+    offline index first (no network at all), then a cached/live Nominatim
+    lookup — bbox filtering keeps working for districts carved out after the
+    source data's admin split (the box just also catches some villages of
+    neighbouring districts, which is harmless in a picker). Falls back to
+    live OSM Overpass, then to an ``error`` payload (HTTP 200) so the UI
+    degrades to free-text search.
     """
     fallback = {"district": district, "villages": [],
                 "error": "Village directory unavailable; type the name and search"}
+    response.headers["Cache-Control"] = _CACHE_DAY
 
     key = f"geovillages2:{state.strip().lower()}:{district.strip().lower()}"
     cached = await cache.get(key)
     if cached is not None:
         return cached
 
-    admin = await _resolve_admin(f"{district.strip()} district, {state.strip()}, India")
+    # Loading a state file means gunzipping up to ~100k places — keep it off
+    # the event loop.
+    pool = await anyio.to_thread.run_sync(_state_villages, state)
 
-    pool = _state_villages(state)
-    if pool and admin and admin.get("bbox"):
-        s, n, w, e = admin["bbox"]
+    bbox = _bundled_bbox(state, district)
+    admin = None
+    if not (pool and bbox):
+        admin = await _resolve_admin(
+            f"{district.strip()} district, {state.strip()}, India")
+        if bbox is None:
+            bbox = (admin or {}).get("bbox")
+
+    if pool and bbox:
+        s, n, w, e = bbox
         found = [{"name": v[0], "lat": v[1], "lon": v[2],
                   "kind": _VILLAGE_KINDS.get(v[3], "village")}
                  for v in pool if s <= v[1] <= n and w <= v[2] <= e]
@@ -192,6 +232,9 @@ async def villages(state: str = Query(min_length=2, max_length=80),
             return out
 
     # ---- live OSM fallback (unknown state name / bbox unresolved) ----
+    if admin is None:
+        admin = await _resolve_admin(
+            f"{district.strip()} district, {state.strip()}, India")
     if admin is None:
         return fallback
     if admin.get("osm_type") == "relation":
@@ -228,7 +271,8 @@ async def villages(state: str = Query(min_length=2, max_length=80),
     return out
 
 
-@router.get("/search")
+@router.get("/search",
+            dependencies=[Depends(limiter("geo-search", 30, 60))])
 async def search(q: str = Query(min_length=2, max_length=200),
                  limit: int = Query(default=5, ge=1, le=10),
                  state: str | None = Query(default=None, max_length=80),
@@ -258,11 +302,15 @@ async def search(q: str = Query(min_length=2, max_length=200),
     try:
         results = _to_results(await _nominatim(params))
         if not results and (state or district):
-            admin_q = (f"{district.strip()} district, {(state or '').strip()}, India"
-                       if district else f"{(state or '').strip()}, India")
-            admin = await _resolve_admin(admin_q)
-            if admin and admin.get("bbox"):
-                s, n, w, e = admin["bbox"]
+            bbox = (_bundled_bbox(state, district)
+                    if state and district else None)
+            if bbox is None:
+                admin_q = (f"{district.strip()} district, {(state or '').strip()}, India"
+                           if district else f"{(state or '').strip()}, India")
+                admin = await _resolve_admin(admin_q)
+                bbox = (admin or {}).get("bbox")
+            if bbox:
+                s, n, w, e = bbox
                 bounded = {
                     "q": q.strip(),
                     "format": "jsonv2",

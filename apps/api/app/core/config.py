@@ -1,9 +1,15 @@
 """Application configuration, loaded from environment / .env."""
 from __future__ import annotations
 
+import logging
+import secrets
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_INSECURE_JWT_DEFAULT = "dev-insecure-change-me"
+
+log = logging.getLogger("smartfarm.config")
 
 
 class Settings(BaseSettings):
@@ -11,6 +17,9 @@ class Settings(BaseSettings):
 
     app_name: str = "SmartFarm API"
     version: str = "0.1.0"
+    # "development" or "production". Production refuses the insecure JWT
+    # default and never echoes OTP codes, whatever otp_dev_mode says.
+    environment: str = "development"
 
     # Persistence / cache (all optional — empty means "run without it")
     database_url: str = ""
@@ -50,7 +59,7 @@ class Settings(BaseSettings):
     google_client_id: str = ""
 
     # Auth (phone/OTP + JWT). CHANGE jwt_secret in production.
-    jwt_secret: str = "dev-insecure-change-me"
+    jwt_secret: str = _INSECURE_JWT_DEFAULT
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
     otp_ttl_seconds: int = 300  # OTP valid for 5 minutes
@@ -74,6 +83,19 @@ class Settings(BaseSettings):
     @property
     def persistence_enabled(self) -> bool:
         return bool(self.database_url)
+
+    def model_post_init(self, __context) -> None:
+        if self.jwt_secret != _INSECURE_JWT_DEFAULT:
+            return
+        if self.environment.lower().startswith("prod"):
+            raise RuntimeError(
+                "JWT_SECRET is still the insecure default — set a strong "
+                "random value before running with ENVIRONMENT=production.")
+        # Dev/zero-config: a per-process random secret keeps tokens unforgeable.
+        # Sessions won't survive a restart until JWT_SECRET is set explicitly.
+        self.jwt_secret = secrets.token_urlsafe(32)
+        log.warning("JWT_SECRET not set — using a random per-process secret; "
+                    "sessions will not survive restarts.")
 
 
 @lru_cache

@@ -51,6 +51,18 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if request.url.path.startswith("/auth"):
+        # Tokens and OTP codes must never land in shared caches.
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/", tags=["meta"])
 def root() -> dict:
     return {

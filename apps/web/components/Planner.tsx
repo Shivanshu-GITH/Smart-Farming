@@ -98,7 +98,9 @@ export default function Planner() {
   const [villagesBusy, setVillagesBusy] = useState(false);
   const [villagesFailed, setVillagesFailed] = useState(false);
   const [villageSuggest, setVillageSuggest] = useState(false);
+  const [villageIdx, setVillageIdx] = useState("");   // <select> value (index)
   const villagesReq = useRef(0);
+  const villageMarker = useRef<maplibregl.Marker | null>(null);
 
   // ---- map overlays (place names, borders, roads) ----
   const [showLabels, setShowLabels] = useState(true);
@@ -210,6 +212,7 @@ export default function Planner() {
         } });
     });
 
+    if (process.env.NODE_ENV !== "production") (window as any).__map = m;
     m.on("click", (e) => {
       if (!drawingRef.current) return;
       vertsRef.current.push([e.lngLat.lng, e.lngLat.lat]);
@@ -379,6 +382,11 @@ export default function Planner() {
     }
   }
 
+  // Fixed `duration` (and custom `speed`) freeze MapLibre's flight math on
+  // long jumps — the camera reports isMoving() but never lands. Default speed
+  // + maxDuration animates short hops and snaps cross-country jumps.
+  const FLY: maplibregl.FlyToOptions = { maxDuration: 6000 };
+
   function gotoResult(r: GeoResult) {
     setSearchResults(null);
     setFinderResults(null);
@@ -386,9 +394,9 @@ export default function Planner() {
     if (!map.current) return;
     if (r.bbox) {
       const [s, n, w, e] = r.bbox;  // Nominatim: [south, north, west, east]
-      map.current.fitBounds([[w, s], [e, n]], { padding: 60, duration: 900, maxZoom: 16 });
+      map.current.fitBounds([[w, s], [e, n]], { padding: 60, maxZoom: 16, ...FLY });
     } else {
-      map.current.flyTo({ center: [r.lon, r.lat], zoom: 15, duration: 900 });
+      map.current.flyTo({ center: [r.lon, r.lat], zoom: 15, ...FLY });
     }
   }
 
@@ -404,6 +412,7 @@ export default function Planner() {
     setFinderState(s); setFinderDistrict(""); setFinderResults(null);
     setDistrictsList([]);
     setVillagesList([]); setVillagesFailed(false); setFinderVillage(""); setVillageSuggest(false);
+    setVillageIdx("");
     if (s) api.geoDistricts(s).then((r) => setDistrictsList(r.districts)).catch(() => {});
   }
 
@@ -411,6 +420,7 @@ export default function Planner() {
     setFinderDistrict(d); setFinderResults(null);
     setFinderVillage(""); setVillageSuggest(false);
     setVillagesList([]); setVillagesFailed(false);
+    setVillageIdx("");
     if (!d || !finderState) return;
     // fetch the district's village directory; first load can take a few
     // seconds (OSM Overpass), later loads are served from the API cache
@@ -428,7 +438,15 @@ export default function Planner() {
 
   function pickVillage(v: GeoVillage) {
     setFinderVillage(v.name); setVillageSuggest(false); setFinderResults(null);
-    map.current?.flyTo({ center: [v.lon, v.lat], zoom: 15, duration: 900 });
+    const m = map.current;
+    if (!m) return;
+    // Drop/move a pin so the farmer can tell which settlement the map jumped
+    // to before zooming further to their field.
+    if (!villageMarker.current) {
+      villageMarker.current = new maplibregl.Marker({ color: "#e2b13c" });
+    }
+    villageMarker.current.setLngLat([v.lon, v.lat]).addTo(m);
+    m.flyTo({ center: [v.lon, v.lat], zoom: 15, ...FLY });
   }
 
   // Substring match first; then a consonant-skeleton pass so transliteration
@@ -508,7 +526,7 @@ export default function Planner() {
         state: parts.length ? parts[parts.length - 1] : undefined,
       },
     } as FieldSummary);
-    map.current?.flyTo({ center: [manualPlace.lon, manualPlace.lat], zoom: 14, duration: 900 });
+    map.current?.flyTo({ center: [manualPlace.lon, manualPlace.lat], zoom: 14, ...FLY });
 
     try {
       setBusy("Fetching soil & climate…");
@@ -671,8 +689,24 @@ export default function Planner() {
               <option value="">{t("finder.district")}</option>
               {districtsList.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
+            {villagesList.length > 0 && (
+              <select className="lang-select finder-select" value={villageIdx}
+                onChange={(e) => {
+                  setVillageIdx(e.target.value);
+                  const v = villagesList[Number(e.target.value)];
+                  if (v) pickVillage(v);
+                }}>
+                <option value="">{t("finder.villagePick")}</option>
+                {villagesList.map((v, i) => (
+                  <option key={`${v.name}:${v.lat}:${v.lon}`} value={i}>
+                    {v.name}{v.kind === "town" ? " 🏙" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="save-row" style={{ marginTop: 6 }}>
-              <input className="input" placeholder={t("finder.village")}
+              <input className="input"
+                placeholder={villagesList.length ? t("finder.typeInstead") : t("finder.village")}
                 disabled={!finderState}
                 value={finderVillage}
                 onChange={(e) => { setFinderVillage(e.target.value); setVillageSuggest(true); setFinderResults(null); }}
@@ -1198,7 +1232,8 @@ function fitToRing(m: maplibregl.Map, ring: number[][]) {
   const b = new maplibregl.LngLatBounds(
     [ring[0][0], ring[0][1]], [ring[0][0], ring[0][1]]);
   for (const [lng, lat] of ring) b.extend([lng, lat]);
-  m.fitBounds(b, { padding: 60, duration: 600 });
+  // no fixed duration/speed — they freeze long flights: see FLY in Planner()
+  m.fitBounds(b, { padding: 60, maxDuration: 6000 });
 }
 
 function renderDraw(m: maplibregl.Map, verts: number[][]) {

@@ -5,6 +5,8 @@ Requires persistence; returns 503 without a DB and 401/403 without a valid
 """
 from __future__ import annotations
 
+import secrets
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +22,7 @@ def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
     token = get_settings().admin_token
     if not token:
         raise HTTPException(status_code=503, detail="Admin API is not enabled.")
-    if x_admin_token != token:
+    if not secrets.compare_digest(x_admin_token or "", token):
         raise HTTPException(status_code=403, detail="Invalid admin token.")
 
 

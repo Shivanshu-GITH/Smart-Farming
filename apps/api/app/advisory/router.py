@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from app.core.ratelimit import limiter
 
 from . import service
 
@@ -35,7 +37,7 @@ def status() -> dict:
     }
 
 
-@router.post("/chat")
+@router.post("/chat", dependencies=[Depends(limiter("advisory-chat", 20, 600))])
 async def chat(req: ChatRequest) -> dict:
     """One advisory turn, grounded in the field context."""
     if not service.advisory_available():
@@ -52,7 +54,7 @@ async def chat(req: ChatRequest) -> dict:
     return {"reply": reply}
 
 
-@router.post("/diagnose")
+@router.post("/diagnose", dependencies=[Depends(limiter("advisory-diag", 10, 600))])
 async def diagnose(req: DiagnoseRequest) -> dict:
     """Identify a pest/disease from a crop photo (Claude vision)."""
     if not service.advisory_available():

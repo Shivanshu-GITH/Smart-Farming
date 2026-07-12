@@ -35,6 +35,8 @@
     "title": "Find my area — step by step",
     "state": "1 · Choose state",
     "district": "2 · Choose district",
+    "villagePick": "3 · Choose village — the map jumps there",
+    "typeInstead": "…or type the name and press Go",
     "village": "3 · Village / area name",
     "go": "Go",
     "loadingVillages": "Loading the village list of this district…",
