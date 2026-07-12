@@ -38,14 +38,11 @@ class Settings(BaseSettings):
     sentinelhub_token_url: str = ""
     # data.gov.in API key for live Agmarknet mandi prices (optional).
     data_gov_api_key: str = ""
-    anthropic_api_key: str = ""
-    # Default to the latest, most capable model for advisory chat.
-    advisory_model: str = "claude-opus-4-8"
 
-    # Fallback AI providers (used when Anthropic isn't configured). Gemini and
-    # Groq have genuinely free tiers; OpenAI is paid. Priority when
-    # advisory_provider="auto": anthropic -> gemini -> groq -> openai.
-    advisory_provider: str = "auto"  # auto|anthropic|gemini|groq|openai
+    # AI advisory providers — bring your own key; whichever is set gets used.
+    # Gemini and Groq have genuinely free tiers; OpenAI is paid. Priority when
+    # advisory_provider="auto": gemini -> groq -> openai.
+    advisory_provider: str = "auto"  # auto|gemini|groq|openai
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"      # free tier, multimodal
     groq_api_key: str = ""

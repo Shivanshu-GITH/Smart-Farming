@@ -18,7 +18,7 @@ Farmer → draws polygon on satellite map (web)
 | `land_intel` | Adapters for soil (SoilGrids), vegetation (NDVI), weather/agro-climate |
 | `agronomy` | Crop suitability + recommendation, seed/fertilizer plan, crop calendar |
 | `layout` | Plant-placement engine (single & multi-layer) + suitability heatmap grid |
-| `advisory` | Claude-powered Q&A / plan explanation (later) |
+| `advisory` | AI-powered Q&A / plan explanation (later) |
 | `core` | config, caching, geo helpers, (optional) DB session |
 
 ## Key design rules
@@ -45,6 +45,6 @@ Farmer → draws polygon on satellite map (web)
 - **Phase 1 — MVP:** soil+NDVI+weather reports, rules-based crop recommend, agronomic plan,
   plant count, basic layout map, PDF export.
 - **Phase 2 — Differentiator:** multi-layer/5-layer design engine, advanced layout+heatmap,
-  crop calendar + reminders, Claude advisory, cost/profit estimator.
+  crop calendar + reminders, AI advisory, cost/profit estimator.
 - **Phase 3 — Platform:** marketplace / govt-scheme / mandi links, time-series monitoring,
   pest ID from photo, admin analytics, full Kadapala integration.

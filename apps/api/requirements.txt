@@ -17,8 +17,7 @@ alembic==1.14.0
 pyjwt==2.10.1
 
 # Stage 2: shared cache, PDF export. NDVI uses Sentinel Hub over plain httpx.
+# The AI advisory calls its providers (Gemini/Groq/OpenAI) over REST via httpx,
+# so no provider SDKs are needed.
 redis==5.2.1
 reportlab==4.2.5
-
-# Stage 3: Claude advisory chatbot (official Anthropic SDK).
-anthropic==0.69.0
