@@ -40,9 +40,14 @@ class Settings(BaseSettings):
     data_gov_api_key: str = ""
 
     # AI advisory providers — bring your own key; whichever is set gets used.
-    # Gemini and Groq have genuinely free tiers; OpenAI is paid. Priority when
-    # advisory_provider="auto": gemini -> groq -> openai.
-    advisory_provider: str = "auto"  # auto|gemini|groq|openai
+    # Gemini and Groq have genuinely free tiers; Claude and OpenAI are paid.
+    # Priority when advisory_provider="auto": claude -> gemini -> groq -> openai.
+    # Claude leads because configuring a paid key is a deliberate choice; remove
+    # the key and it falls back to the free tiers on its own.
+    advisory_provider: str = "auto"  # auto|claude|gemini|groq|openai
+    # Anthropic Claude — paid, multimodal, highest answer quality here.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"      # free tier, multimodal
     groq_api_key: str = ""

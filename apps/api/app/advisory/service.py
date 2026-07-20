@@ -2,9 +2,9 @@
 
 Grounds the model in the farmer's actual field context (area, region, soil,
 climate, NDVI, chosen crops/plan) so answers are specific rather than generic.
-Backed by a multi-provider layer (free Gemini/Groq tiers first, paid OpenAI as
-fallback — see providers.py). Degrades gracefully when no provider is
-configured, matching the rest of the platform.
+Backed by a multi-provider layer (Claude when its key is set, then the free
+Gemini/Groq tiers, with OpenAI last — see providers.py). Degrades gracefully
+when no provider is configured, matching the rest of the platform.
 """
 from __future__ import annotations
 

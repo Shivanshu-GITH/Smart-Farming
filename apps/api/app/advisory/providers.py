@@ -1,12 +1,14 @@
 """Multi-provider AI backend for advisory chat and photo diagnosis.
 
-Bring-your-own-key: whichever provider key is configured gets used. Free tiers
-first — Google Gemini, then Groq — with paid OpenAI as a fallback. Selection
-order (advisory_provider="auto"): gemini -> groq -> openai. Photo diagnosis
-only uses vision-capable providers (gemini, openai).
+Bring-your-own-key: whichever provider key is configured gets used. Claude
+leads when its key is set — configuring a paid key is a deliberate choice —
+then the free tiers (Google Gemini, Groq), with paid OpenAI last. Selection
+order (advisory_provider="auto"): claude -> gemini -> groq -> openai. Photo
+diagnosis only uses vision-capable providers (claude, gemini, openai).
 
 Providers are called over their REST APIs with httpx to avoid pulling in an
-SDK per provider. Groq/OpenAI share the OpenAI-compatible schema.
+SDK per provider. Groq/OpenAI share the OpenAI-compatible schema; Claude uses
+Anthropic's Messages API.
 """
 from __future__ import annotations
 
@@ -14,7 +16,8 @@ import httpx
 
 from app.core.config import get_settings
 
-VISION_CAPABLE = {"gemini", "openai"}
+VISION_CAPABLE = {"claude", "gemini", "openai"}
+_PRIORITY = ("claude", "gemini", "groq", "openai")
 _OPENAI_COMPAT = {
     "groq": "https://api.groq.com/openai/v1",
     "openai": "https://api.openai.com/v1",
@@ -25,11 +28,12 @@ def _configured() -> list[str]:
     """Providers with a key, in default priority order."""
     s = get_settings()
     keys = {
+        "claude": s.anthropic_api_key,
         "gemini": s.gemini_api_key,
         "groq": s.groq_api_key,
         "openai": s.openai_api_key,
     }
-    return [p for p in ("gemini", "groq", "openai") if keys[p]]
+    return [p for p in _PRIORITY if keys[p]]
 
 
 def select_provider(*, vision: bool = False) -> str | None:
@@ -52,6 +56,8 @@ async def chat(system: str, messages: list[dict]) -> str:
     provider = select_provider()
     if provider is None:
         raise RuntimeError("No advisory provider configured.")
+    if provider == "claude":
+        return await _claude_chat(system, messages)
     if provider == "gemini":
         return await _gemini_chat(system, messages)
     return await _openai_compat_chat(provider, system, messages)
@@ -62,10 +68,68 @@ async def diagnose(system: str, image_b64: str, media_type: str, text: str) -> s
     if provider is None:
         raise ValueError(
             "Photo diagnosis needs a vision-capable AI provider "
-            "(Gemini or OpenAI).")
+            "(Claude, Gemini or OpenAI).")
+    if provider == "claude":
+        return await _claude_vision(system, image_b64, media_type, text)
     if provider == "gemini":
         return await _gemini_vision(system, image_b64, media_type, text)
     return await _openai_vision(provider, system, image_b64, media_type, text)
+
+
+# --- Anthropic Claude (Messages API) ---
+
+_CLAUDE_URL = "https://api.anthropic.com/v1/messages"
+
+
+def _claude_headers() -> dict:
+    return {
+        "x-api-key": get_settings().anthropic_api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+
+
+def _claude_body(system: str, messages: list[dict]) -> dict:
+    # Thinking off: advisory turns are short and latency-sensitive, and with
+    # thinking on max_tokens is shared with the reasoning budget. This mirrors
+    # the thinkingBudget=0 we set for Gemini 2.5-flash below.
+    return {
+        "model": get_settings().anthropic_model,
+        "max_tokens": 2048,
+        "thinking": {"type": "disabled"},
+        "system": system,
+        "messages": messages,
+    }
+
+
+def _claude_text(data: dict) -> str:
+    if data.get("stop_reason") == "refusal":
+        raise RuntimeError(
+            "Claude declined to answer this request. Rephrase the question, "
+            "or ask a local agri-extension officer.")
+    return "".join(b.get("text", "") for b in data.get("content", [])
+                   if b.get("type") == "text")
+
+
+async def _claude_chat(system: str, messages: list[dict]) -> str:
+    body = _claude_body(system, [{"role": m["role"], "content": m["content"]}
+                                 for m in messages])
+    async with httpx.AsyncClient(timeout=40) as client:
+        resp = await client.post(_CLAUDE_URL, json=body, headers=_claude_headers())
+        resp.raise_for_status()
+        return _claude_text(resp.json())
+
+
+async def _claude_vision(system, image_b64, media_type, text) -> str:
+    body = _claude_body(system, [{"role": "user", "content": [
+        {"type": "image", "source": {"type": "base64",
+                                     "media_type": media_type,
+                                     "data": image_b64}},
+        {"type": "text", "text": text}]}])
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(_CLAUDE_URL, json=body, headers=_claude_headers())
+        resp.raise_for_status()
+        return _claude_text(resp.json())
 
 
 # --- Google Gemini (REST) ---

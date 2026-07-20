@@ -8,7 +8,7 @@ test module (and thus before app import / settings caching).
 import os
 
 _FORCE_EMPTY = [
-    "GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY",
     "SENTINELHUB_CLIENT_ID", "SENTINELHUB_CLIENT_SECRET",
     "DATA_GOV_API_KEY", "DATABASE_URL", "REDIS_URL",
     "ADMIN_TOKEN", "KADAPALA_SSO_SECRET",

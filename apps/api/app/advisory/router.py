@@ -43,8 +43,8 @@ async def chat(req: ChatRequest) -> dict:
     if not service.advisory_available():
         raise HTTPException(
             status_code=503,
-            detail="Advisory chatbot is not configured "
-                   "(set GEMINI_API_KEY — free — or another provider key).",
+            detail="Advisory chatbot is not configured (set ANTHROPIC_API_KEY, "
+                   "or GEMINI_API_KEY for the free tier).",
         )
     try:
         reply = await service.chat(
@@ -61,8 +61,8 @@ async def diagnose(req: DiagnoseRequest) -> dict:
     if not service.advisory_available():
         raise HTTPException(
             status_code=503,
-            detail="Advisory chatbot is not configured "
-                   "(set GEMINI_API_KEY — free — or another provider key).",
+            detail="Advisory chatbot is not configured (set ANTHROPIC_API_KEY, "
+                   "or GEMINI_API_KEY for the free tier).",
         )
     # Accept a data URL and strip the prefix if present.
     data = req.image_base64

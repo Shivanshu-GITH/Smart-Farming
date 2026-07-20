@@ -4,7 +4,7 @@ from app.advisory import providers
 
 
 def _settings(**kw):
-    base = dict(gemini_api_key="", groq_api_key="",
+    base = dict(anthropic_api_key="", gemini_api_key="", groq_api_key="",
                 openai_api_key="", advisory_provider="auto")
     base.update(kw)
     return SimpleNamespace(**base)
@@ -20,9 +20,27 @@ def test_no_provider(monkeypatch):
     assert providers.select_provider() is None
 
 
+def test_priority_prefers_claude_when_keyed(monkeypatch):
+    _patch(monkeypatch, anthropic_api_key="a", gemini_api_key="g",
+           groq_api_key="q", openai_api_key="o")
+    assert providers.select_provider() == "claude"
+
+
 def test_priority_prefers_free_gemini(monkeypatch):
     _patch(monkeypatch, gemini_api_key="g", groq_api_key="q", openai_api_key="o")
     assert providers.select_provider() == "gemini"
+
+
+def test_removing_claude_key_falls_back_to_free(monkeypatch):
+    _patch(monkeypatch, anthropic_api_key="a", gemini_api_key="g")
+    assert providers.select_provider() == "claude"
+    _patch(monkeypatch, gemini_api_key="g")  # key removed from .env
+    assert providers.select_provider() == "gemini"
+
+
+def test_claude_is_vision_capable(monkeypatch):
+    _patch(monkeypatch, anthropic_api_key="a")
+    assert providers.select_provider(vision=True) == "claude"
 
 
 def test_falls_back_to_gemini_then_groq(monkeypatch):
