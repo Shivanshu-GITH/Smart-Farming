@@ -13,6 +13,9 @@ from app.core import cache
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+# Same daily variables and full start/end range as the archive host; used when
+# archive-api is unreachable (it intermittently fails the TLS handshake).
+HISTORICAL_FORECAST_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
 
 def current_indian_season(today: dt.date | None = None) -> str:
@@ -42,10 +45,7 @@ async def get_climate(lat: float, lon: float) -> dict:
             "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
             "timezone": "auto",
         }
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(ARCHIVE_URL, params=params)
-            resp.raise_for_status()
-            daily = resp.json().get("daily", {})
+        daily = await _fetch_daily(params)
 
         tmax = [t for t in daily.get("temperature_2m_max", []) if t is not None]
         tmin = [t for t in daily.get("temperature_2m_min", []) if t is not None]
@@ -65,6 +65,24 @@ async def get_climate(lat: float, lon: float) -> dict:
     if "error" not in result:
         await cache.set(key, result, ttl_seconds=7 * 86_400)
     return result
+
+
+async def _fetch_daily(params: dict) -> dict:
+    """Daily series from the archive host, falling back to historical-forecast.
+
+    Both serve the same variables over the same explicit date range, so the
+    derived rainfall/temperature figures mean the same thing either way.
+    """
+    last_error: httpx.HTTPError | None = None
+    async with httpx.AsyncClient(timeout=20) as client:
+        for url in (ARCHIVE_URL, HISTORICAL_FORECAST_URL):
+            try:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                return resp.json().get("daily", {})
+            except httpx.HTTPError as exc:
+                last_error = exc
+    raise last_error  # type: ignore[misc]
 
 
 def _rainfall_band(mm: float | None) -> str | None:
