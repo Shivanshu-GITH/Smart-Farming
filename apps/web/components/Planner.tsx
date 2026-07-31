@@ -16,24 +16,84 @@ const LAYER_COLORS: Record<string, string> = {
   top: "#e2b13c",
 };
 
+/*
+ * Esri answers a request for imagery it does not have with HTTP 200 and a grey
+ * "Map data not yet available" JPEG, rather than a 404. MapLibre therefore sees
+ * a perfectly good tile and paints it over the farmer's field.
+ *
+ * A fixed source `maxzoom` cannot fix this, because the depth of Esri's cache
+ * varies *per tile*, not globally: over Amethi (UP) and Banswada (TS) the
+ * imagery stops at z18, while other places have real z19. Any single cap is
+ * simultaneously too deep somewhere and needlessly blurry somewhere else.
+ *
+ * So detect the placeholder instead. It is one fixed 2521-byte JPEG, identical
+ * for every tile it is served for. When we see it we fail the tile, and
+ * MapLibre's normal missing-tile handling walks up the pyramid and keeps the
+ * nearest real parent on screen (upscaled). The result is that zooming in never
+ * reveals the grey placeholder, wherever you are — the imagery just softens.
+ */
+const ESRI_PROTOCOL = "esri";
+const ESRI_NO_DATA_BYTES = 2521;
+// Cheap pre-filter (length) plus a content check, so a real 2521-byte tile —
+// a uniform stretch of water, say — is not mistaken for the placeholder.
+const ESRI_NO_DATA_PROBES: ReadonlyArray<readonly [number, number]> = [
+  [100, 9], [600, 0], [1200, 222], [1800, 86], [2400, 0],
+];
+
+function isEsriNoDataTile(buf: ArrayBuffer): boolean {
+  if (buf.byteLength !== ESRI_NO_DATA_BYTES) return false;
+  const bytes = new Uint8Array(buf);
+  return ESRI_NO_DATA_PROBES.every(([offset, value]) => bytes[offset] === value);
+}
+
+let esriProtocolRegistered = false;
+
+/** Register once per page — addProtocol is global to the maplibre module. */
+function registerEsriProtocol() {
+  if (esriProtocolRegistered) return;
+  esriProtocolRegistered = true;
+
+  maplibregl.addProtocol(ESRI_PROTOCOL, async (params, abortController) => {
+    const url = params.url.replace(`${ESRI_PROTOCOL}://`, "https://");
+    const response = await fetch(url, { signal: abortController.signal });
+    if (!response.ok) throw new Error(`Tile ${response.status}`);
+
+    const data = await response.arrayBuffer();
+    if (isEsriNoDataTile(data)) {
+      // Throwing marks the tile errored, which is what makes MapLibre fall back
+      // to the parent instead of drawing "Map data not yet available".
+      throw new Error("No imagery for this tile");
+    }
+    return { data };
+  });
+}
+
+const esriTiles = (path: string) =>
+  [`${ESRI_PROTOCOL}://server.arcgisonline.com/ArcGIS/rest/services/${path}/MapServer/tile/{z}/{y}/{x}`];
+
+/** Units an Indian farmer is likely to know their plot size in. */
+type AreaUnit = "acre" | "hectare" | "guntha";
+
 const SAT_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     sat: {
       type: "raster",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      tiles: esriTiles("World_Imagery"),
       tileSize: 256,
       attribution: "Esri World Imagery",
     },
     // Google-Maps-style hybrid overlays: roads + place names/admin borders.
+    // These are transparent PNGs whose "nothing here" state is simply empty, so
+    // they never produce the grey placeholder and need no special handling.
     roads: {
       type: "raster",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"],
+      tiles: esriTiles("Reference/World_Transportation"),
       tileSize: 256,
     },
     labels: {
       type: "raster",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+      tiles: esriTiles("Reference/World_Boundaries_and_Places"),
       tileSize: 256,
       attribution: "Esri Boundaries & Places",
     },
@@ -168,6 +228,8 @@ export default function Planner() {
   // ---- map init ----
   useEffect(() => {
     if (!mapEl.current || map.current) return;
+    // Must happen before the style resolves any tile URL.
+    registerEsriProtocol();
     const m = new maplibregl.Map({
       container: mapEl.current,
       style: SAT_STYLE,
@@ -200,7 +262,10 @@ export default function Planner() {
       m.addSource("plants", { type: "geojson", data: emptyFC() });
       m.addLayer({ id: "plants-pts", type: "circle", source: "plants",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 2, 18, 4],
+          // Keep growing past 18 — deep zoom falls back to upscaled parent tiles, so a
+          // clamped radius would leave plant dots pinned at 4px while the ground
+          // under them keeps scaling up.
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 2, 18, 4, 22, 14],
           "circle-color": ["match", ["get", "layer"],
             "underground", LAYER_COLORS.underground,
             "ground", LAYER_COLORS.ground,
