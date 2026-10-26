@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import maplibregl from "maplibre-gl";
 import { api, type FieldSummary, type Recommendation, type LayoutResult, type Geometry, type SavedField, type ValidationResult, type DesignResult, type DesignStack, type PlanResult, type EconomicsResult, type CatalogueCrop, type FarmingSystem, type GeoResult, type GeoVillage } from "@/lib/api";
@@ -74,6 +74,12 @@ const esriTiles = (path: string) =>
 /** Units an Indian farmer is likely to know their plot size in. */
 type AreaUnit = "acre" | "hectare" | "guntha";
 
+// Villages rendered as <option> nodes in the picker. Big districts run to
+// ~7,600 villages (Sitapur), which is both unscrollable and slow to build as
+// DOM nodes; beyond this the type-ahead is the usable path and it still
+// searches the full list.
+const VILLAGE_SELECT_LIMIT = 400;
+
 const SAT_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -127,7 +133,9 @@ export default function Planner() {
   const [busy, setBusy] = useState<string | null>(null);
 
   // ---- Stage 3: moat (validation, 5-layer design, calendar) ----
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  // Read through `validation` below (derived), not this — it is gated on the
+  // selection so an empty pick can't briefly show the previous combo's verdict.
+  const [fetchedValidation, setFetchedValidation] = useState<ValidationResult | null>(null);
   const [design, setDesign] = useState<DesignResult | null>(null);
   const [designBusy, setDesignBusy] = useState(false);
   const [plans, setPlans] = useState<PlanResult[]>([]);
@@ -165,6 +173,18 @@ export default function Planner() {
   // ---- map overlays (place names, borders, roads) ----
   const [showLabels, setShowLabels] = useState(true);
 
+  // ---- "use my location" (device GPS, never sent to the server) ----
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState("");
+  const [locateAccuracy, setLocateAccuracy] = useState<number | null>(null);
+
+  // Whether the planning service answered at all. Every call in this component
+  // swallows its own failure so one dead provider cannot take out the page —
+  // but that also meant a completely unreachable service looked identical to a
+  // working one with nothing to say. These two calls are the canary: they have
+  // no external dependencies, so if they fail the service itself is gone.
+  const [serviceDown, setServiceDown] = useState(false);
+
   // ---- manual land entry (no polygon) ----
   const [manualMode, setManualMode] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -172,11 +192,17 @@ export default function Planner() {
   const [manualPlace, setManualPlace] = useState<GeoResult | null>(null);
   const [manualResults, setManualResults] = useState<GeoResult[] | null>(null);
   const [manualArea, setManualArea] = useState("");
-  const [manualUnit, setManualUnit] = useState<"acre" | "hectare" | "guntha">("acre");
+  const [manualUnit, setManualUnit] = useState<AreaUnit>("acre");
 
   useEffect(() => {
-    api.systems().then((r) => setSystems(r.systems)).catch(() => {});
-    api.crops().then((r) => setCatalogue(r.crops)).catch(() => {});
+    let cancelled = false;
+    Promise.all([
+      api.systems().then((r) => setSystems(r.systems)),
+      api.crops().then((r) => setCatalogue(r.crops)),
+    ])
+      .then(() => { if (!cancelled) setServiceDown(false); })
+      .catch(() => { if (!cancelled) setServiceDown(true); });
+    return () => { cancelled = true; };
   }, []);
 
   // Toggle the names/borders/roads overlay (Google-Maps-hybrid look).
@@ -189,40 +215,47 @@ export default function Planner() {
     }
   }, [showLabels]);
 
+  // Water source the farmer reports. The crop statistics behind the recommender
+  // mix irrigated and rain-fed land; for rain-fed farms the API also applies
+  // each crop's rain-fed rainfall requirement.
+  const [water, setWater] = useState<"unknown" | "irrigated" | "rainfed">("unknown");
+
   function landCtx(): Record<string, unknown> {
-    return {
-      ph: land?.soil?.ph ?? undefined,
-      texture: land?.soil?.texture_class ?? undefined,
-      rainfall_mm: land?.climate?.annual_rainfall_mm ?? undefined,
-      temp_max_c: land?.climate?.temp_max_avg_c ?? undefined,
-      season: land?.climate?.season ?? undefined,
-    };
+    return siteCtx(land, summary?.region?.state, water);
   }
 
   // Validate the selected combo (for the chosen system) whenever it changes.
+  // With nothing selected there is nothing to validate, so `validation` is
+  // derived rather than stored — an empty selection cannot show a stale verdict.
+  const validation = selected.length === 0 ? null : fetchedValidation;
+
   useEffect(() => {
-    if (selected.length === 0) { setValidation(null); return; }
+    if (selected.length === 0) return;
     let cancelled = false;
     api.validate(selected, { ...landCtx(), system })
-      .then((v) => { if (!cancelled) setValidation(v); })
-      .catch(() => { if (!cancelled) setValidation(null); });
+      .then((v) => { if (!cancelled) setFetchedValidation(v); })
+      .catch(() => { if (!cancelled) setFetchedValidation(null); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, land, system]);
 
   // ---- auth + saved fields ----
   const { user } = useAuth();
-  const [savedFields, setSavedFields] = useState<SavedField[]>([]);
+  const [fetchedFields, setFetchedFields] = useState<SavedField[]>([]);
   const [fieldName, setFieldName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [savedFieldId, setSavedFieldId] = useState<string | null>(null);
   const [planSaved, setPlanSaved] = useState(false);
 
-  // Load the user's saved fields whenever they sign in (clear on sign-out).
+  // Signed out means no saved fields, so derive it rather than clearing state —
+  // one user's fields can never flash up for the next.
+  const savedFields = user ? fetchedFields : [];
+
+  // Load the account's saved fields on sign-in.
   useEffect(() => {
-    if (!user) { setSavedFields([]); return; }
-    api.listFields().then(setSavedFields).catch(() => {});
+    if (!user) return;
+    api.listFields().then(setFetchedFields).catch(() => {});
   }, [user]);
 
   // ---- map init ----
@@ -237,6 +270,15 @@ export default function Planner() {
       zoom: 15,
     });
     m.addControl(new maplibregl.NavigationControl(), "top-left");
+    // Without a listener MapLibre console.errors every failed tile, and the Next
+    // dev overlay turns each into an error. Tile failures are expected here —
+    // the no-imagery placeholder is rejected on purpose (see registerEsriProtocol)
+    // and a flaky connection drops tiles — and MapLibre already falls back to the
+    // parent tile. Only non-tile errors are worth surfacing.
+    m.on("error", (e) => {
+      const tileError = "tile" in e || "sourceId" in e;
+      if (!tileError) console.warn("map:", e.error?.message ?? e.error);
+    });
     m.on("load", () => {
       m.addSource("draw", { type: "geojson", data: emptyFC() });
       m.addLayer({ id: "draw-line", type: "line", source: "draw",
@@ -277,7 +319,10 @@ export default function Planner() {
         } });
     });
 
-    if (process.env.NODE_ENV !== "production") (window as any).__map = m;
+    // Dev-only handle for poking at the map from the console.
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as { __map?: maplibregl.Map }).__map = m;
+    }
     m.on("click", (e) => {
       if (!drawingRef.current) return;
       vertsRef.current.push([e.lngLat.lng, e.lngLat.lat]);
@@ -296,11 +341,11 @@ export default function Planner() {
     setGeometry(null); setSummary(null); setLand(null); setNdvi(null); setNdviSeries([]);
     setElevation(null); setSavedFieldId(null); setPlanSaved(false);
     setRecs([]); setSelected([]); setLayout(null);
-    setValidation(null); setDesign(null); setPlans([]); setEconomics(null);
+    setFetchedValidation(null); setDesign(null); setPlans([]); setEconomics(null);
     if (map.current) {
-      (map.current.getSource("field") as any)?.setData(emptyFC());
-      (map.current.getSource("plants") as any)?.setData(emptyFC());
-      (map.current.getSource("heat") as any)?.setData(emptyFC());
+      geoSource(map.current, "field")?.setData(emptyFC());
+      geoSource(map.current, "plants")?.setData(emptyFC());
+      geoSource(map.current, "heat")?.setData(emptyFC());
       renderDraw(map.current, []);
     }
   }
@@ -312,7 +357,7 @@ export default function Planner() {
     if (verts.length < 3 || !map.current) return;
     const ring = [...verts, verts[0]];
     const geom: Geometry = { type: "Polygon", coordinates: [ring] };
-    (map.current.getSource("draw") as any)?.setData(emptyFC());
+    geoSource(map.current, "draw")?.setData(emptyFC());
     await applyGeometry(geom, { fit: false });
   }
 
@@ -323,12 +368,12 @@ export default function Planner() {
     setSaveMsg(null);
     setFieldName("");
     if (map.current) {
-      (map.current.getSource("field") as any)?.setData({
+      geoSource(map.current, "field")?.setData({
         type: "FeatureCollection",
         features: [{ type: "Feature", geometry: geom, properties: {} }],
       });
-      (map.current.getSource("plants") as any)?.setData(emptyFC());
-      (map.current.getSource("heat") as any)?.setData(emptyFC());
+      geoSource(map.current, "plants")?.setData(emptyFC());
+      geoSource(map.current, "heat")?.setData(emptyFC());
       if (opts.fit) fitToRing(map.current, geom.coordinates[0]);
     }
     setLayout(null); setSelected([]); setPlanSaved(false);
@@ -342,7 +387,7 @@ export default function Planner() {
       const name = fieldName.trim() ||
         summary?.region?.village || summary?.region?.district || "My field";
       const saved = await api.createField(name, geometry);
-      setSavedFields((cur) => [saved, ...cur]);
+      setFetchedFields((cur) => [saved, ...cur]);
       setSavedFieldId(saved.id);
       setSaveMsg(`Saved “${saved.name}”.`);
       setFieldName("");
@@ -375,7 +420,7 @@ export default function Planner() {
   async function deleteSavedField(id: string) {
     try {
       await api.deleteField(id);
-      setSavedFields((cur) => cur.filter((f) => f.id !== id));
+      setFetchedFields((cur) => cur.filter((f) => f.id !== id));
     } catch {
       /* ignore */
     }
@@ -395,19 +440,22 @@ export default function Planner() {
       api.ndviSeries(geom).then((r) => setNdviSeries(r.series || [])).catch(() => setNdviSeries([]));
       setBusy("Recommending crops…");
       const recRes = await api.recommend({
-        ph: report?.soil?.ph ?? undefined,
-        texture: report?.soil?.texture_class ?? undefined,
-        rainfall_mm: report?.climate?.annual_rainfall_mm ?? undefined,
-        temp_max_c: report?.climate?.temp_max_avg_c ?? undefined,
-        season: report?.climate?.season ?? undefined,
-        system,
-        limit: 8,
+        ...siteCtx(report, s.region?.state, water), system, limit: 8,
       });
       setRecs(recRes.recommendations);
     } catch (err) {
       console.error(err);
     } finally {
       setBusy(null);
+    }
+  }
+
+  function changeWater(w: "unknown" | "irrigated" | "rainfed") {
+    if (w === water) return;
+    setWater(w);
+    if (land) {
+      api.recommend({ ...siteCtx(land, summary?.region?.state, w), system, limit: 8 })
+        .then((r) => setRecs(r.recommendations)).catch(() => {});
     }
   }
 
@@ -424,7 +472,7 @@ export default function Planner() {
   function changeSystem(id: string) {
     if (id === system) return;
     setSystem(id);
-    setSelected([]); setLayout(null); setValidation(null); setDesign(null);
+    setSelected([]); setLayout(null); setFetchedValidation(null); setDesign(null);
     setPlans([]); setEconomics(null); setPlanSaved(false);
     if (land) {
       api.recommend({ ...landCtx(), system: id, limit: 8 })
@@ -465,11 +513,65 @@ export default function Planner() {
     }
   }
 
+  // ---- "use my location" ----
+  /** Centre the map on the device's own GPS fix, with the user's permission.
+   *
+   *  Nothing is sent anywhere: the fix is used purely to move the map and drop
+   *  a marker, so a farmer standing in their field can start drawing straight
+   *  away instead of hunting for it by name. */
+  function locateMe() {
+    setLocateError("");
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setLocateError(t("map.locateUnsupported"));
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setLocating(false);
+        const { latitude: lat, longitude: lon, accuracy } = p.coords;
+        setLocateAccuracy(accuracy ?? null);
+        const m = map.current;
+        if (!m) return;
+
+        // Zoom to roughly the reported accuracy so the pin is not implying more
+        // precision than the device actually has.
+        const zoom = accuracy && accuracy > 500 ? 14 : accuracy && accuracy > 100 ? 16 : 17;
+        m.flyTo({ center: [lon, lat], zoom, ...FLY });
+
+        villageMarker.current?.remove();
+        villageMarker.current = new maplibregl.Marker({ color: "#d8a23a" })
+          .setLngLat([lon, lat])
+          .setPopup(new maplibregl.Popup({ offset: 24 }).setText(t("map.youAreHere")))
+          .addTo(m);
+      },
+      (err) => {
+        setLocating(false);
+        setLocateError(
+          err.code === err.PERMISSION_DENIED
+            ? t("map.locateDenied")
+            : t("map.locateFailed"),
+        );
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    );
+  }
+
   // ---- layered finder helpers ----
+  const finderRef = useRef<HTMLDivElement>(null);
+
   function openFinder() {
-    setFinderOpen((o) => !o);
+    const opening = !finderOpen;
+    setFinderOpen(opening);
     if (!statesList.length) {
       api.geoStates().then((r) => setStatesList(r.states)).catch(() => {});
+    }
+    // The finder panel opens beneath the map search; on a phone bring it into
+    // view so the newly revealed steps aren't below the fold.
+    if (opening) {
+      requestAnimationFrame(() =>
+        finderRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+      );
     }
   }
 
@@ -516,18 +618,34 @@ export default function Planner() {
 
   // Substring match first; then a consonant-skeleton pass so transliteration
   // variants still hit (farmer types "haidergarh", data says "Haidargarh").
-  const villageMatches = (() => {
+  //
+  // Memoised, and this matters: a big district is ~7,600 villages (Sitapur),
+  // and as a bare expression this re-scanned the whole list on every render of
+  // a component that re-renders on map moves. The `seen` membership test is a
+  // Set for the same reason — Array.includes inside a filter made the fuzzy
+  // pass quadratic over those 7,600 entries.
+  const villageMatches = useMemo(() => {
     const strip = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     const q = strip(finderVillage.trim());
     const direct = villagesList.filter((v) => strip(v.name).includes(q));
     if (direct.length >= 40 || q.length < 3) return direct.slice(0, 40);
+    const seen = new Set(direct);
     const skel = (s: string) => s.replace(/[^bcdfghjklmnpqrstvwxyz]/g, "");
     const qs = skel(q);
     const fuzzy = qs
-      ? villagesList.filter((v) => !direct.includes(v) && skel(strip(v.name)).includes(qs))
+      ? villagesList.filter((v) => !seen.has(v) && skel(strip(v.name)).includes(qs))
       : [];
     return [...direct, ...fuzzy].slice(0, 40);
-  })();
+  }, [villagesList, finderVillage]);
+
+  // The dropdown lists a slice, not the whole district. Every <option> is a DOM
+  // node built synchronously the moment a district resolves, so a 7,600-village
+  // district froze the page for seconds on a control nobody can scroll usefully.
+  // Past this many, the type-ahead below is the way to find a village.
+  const villageOptions = useMemo(
+    () => villagesList.slice(0, VILLAGE_SELECT_LIMIT),
+    [villagesList],
+  );
 
   async function finderGo(target?: string) {
     // search the village scoped to district+state; with no village, jump to
@@ -569,7 +687,7 @@ export default function Planner() {
 
     setManualOpen(false); setManualMode(true);
     setGeometry(null); setLayout(null); setSelected([]); setPlans([]);
-    setEconomics(null); setValidation(null); setDesign(null);
+    setEconomics(null); setFetchedValidation(null); setDesign(null);
     setNdvi(null); setNdviSeries([]); setSavedFieldId(null); setPlanSaved(false);
 
     // "Tenali, Guntur, Andhra Pradesh, 522200, India" → drop postcode + country
@@ -600,13 +718,8 @@ export default function Planner() {
       api.elevation(manualPlace.lat, manualPlace.lon).then(setElevation).catch(() => setElevation(null));
       setBusy("Recommending crops…");
       const recRes = await api.recommend({
-        ph: report?.soil?.ph ?? undefined,
-        texture: report?.soil?.texture_class ?? undefined,
-        rainfall_mm: report?.climate?.annual_rainfall_mm ?? undefined,
-        temp_max_c: report?.climate?.temp_max_avg_c ?? undefined,
-        season: report?.climate?.season ?? undefined,
-        system,
-        limit: 8,
+        ...siteCtx(report, parts.length ? parts[parts.length - 1] : undefined, water),
+        system, limit: 8,
       });
       setRecs(recRes.recommendations);
     } finally {
@@ -653,19 +766,25 @@ export default function Planner() {
     try {
       const res = await api.layout(geometry, selected, system);
       setLayout(res);
-      // Fetch per-crop plans (planting material / fertiliser / calendar).
+      // Fetch per-crop plans (planting material / fertiliser / calendar). The
+      // plant count comes from the layout, so the seedlings/suckers to buy
+      // match the positions drawn on the map.
       const areaM2 = summary?.area.square_meters ?? 0;
+      const laidOut = new Map(res.crops.map((c) => [c.crop_id, c.plant_count]));
       const ps = await Promise.all(
-        selected.map((id) => api.plan(id, areaM2, system).catch(() => null)));
+        selected.map((id) => api.plan(id, areaM2, system, {
+          plant_count: laidOut.get(id),
+          perimeter_m: summary?.perimeter_meters || undefined,
+        }).catch(() => null)));
       setPlans(ps.filter((p): p is PlanResult => p !== null));
       // Cost / revenue / profit estimate (mandi prices when available).
       const state = summary?.region?.state;
       api.economics(selected, areaM2, state, system).then(setEconomics).catch(() => setEconomics(null));
       if (map.current) {
-        (map.current.getSource("plants") as any)?.setData(res.planting_points);
-        const heatFC = {
+        geoSource(map.current, "plants")?.setData(res.planting_points);
+        const heatFC: GeoJSON.FeatureCollection = {
           type: "FeatureCollection",
-          features: res.heatmap.cells.map((c: any) => ({
+          features: res.heatmap.cells.map((c) => ({
             type: "Feature",
             properties: { intensity: c.intensity, count: c.count },
             geometry: {
@@ -677,7 +796,7 @@ export default function Planner() {
             },
           })),
         };
-        (map.current.getSource("heat") as any)?.setData(heatFC);
+        geoSource(map.current, "heat")?.setData(heatFC);
       }
     } finally {
       setBusy(null);
@@ -721,10 +840,31 @@ export default function Planner() {
           onClick={doSearch}>
           {searching ? "…" : "🔍"}
         </button>
-        <button className={"btn btn-sm" + (finderOpen ? "" : " secondary")}
-          title={t("finder.title")} onClick={openFinder}>📍</button>
-        <button className={"btn btn-sm" + (showLabels ? "" : " secondary")}
-          title={t("map.labels")} onClick={() => setShowLabels((v) => !v)}>🏷️</button>
+        {/* Labelled so the finder and GPS are discoverable on a phone, where a
+            title tooltip never shows. The row wraps on small screens. */}
+        <button className={"map-btn" + (finderOpen ? "" : " secondary")}
+          title={t("finder.title")} onClick={openFinder}>
+          📍 <span>{t("map.finderBtn")}</span>
+        </button>
+        <button className="map-btn" disabled={locating}
+          title={t("map.locateBtn")} onClick={locateMe}>
+          🎯 <span>{locating ? t("map.locating") : t("map.locateBtn")}</span>
+        </button>
+        <button className={"map-btn" + (showLabels ? "" : " secondary")}
+          title={t("map.labels")} onClick={() => setShowLabels((v) => !v)}>
+          🏷️ <span>{t("map.labelsBtn")}</span>
+        </button>
+        {(locateError || locateAccuracy != null) && (
+          <div className="map-note">
+            {locateError ? (
+              <span className="map-note-error">{locateError}</span>
+            ) : (
+              t("map.locateAccuracy", { n: Math.round(locateAccuracy as number) })
+            )}
+            <button className="map-note-close"
+              onClick={() => { setLocateError(""); setLocateAccuracy(null); }}>✕</button>
+          </div>
+        )}
         {searchResults !== null && (
           <div className="map-search-results">
             {searchResults.length === 0 && (
@@ -739,7 +879,7 @@ export default function Planner() {
         )}
 
         {finderOpen && (
-          <div className="finder-panel">
+          <div className="finder-panel" ref={finderRef}>
             <p className="hint" style={{ fontWeight: 600, margin: "0 0 6px" }}>
               {t("finder.title")}
             </p>
@@ -762,11 +902,18 @@ export default function Planner() {
                   if (v) pickVillage(v);
                 }}>
                 <option value="">{t("finder.villagePick")}</option>
-                {villagesList.map((v, i) => (
+                {villageOptions.map((v, i) => (
                   <option key={`${v.name}:${v.lat}:${v.lon}`} value={i}>
                     {v.name}{v.kind === "town" ? " 🏙" : ""}
                   </option>
                 ))}
+                {villagesList.length > villageOptions.length && (
+                  <option value="" disabled>
+                    {t("finder.villageMore", {
+                      n: villagesList.length - villageOptions.length,
+                    })}
+                  </option>
+                )}
               </select>
             )}
             <div className="save-row" style={{ marginTop: 6 }}>
@@ -827,6 +974,13 @@ export default function Planner() {
         </div>
         <p className="tagline">{t("brand.tagline")}</p>
 
+        {serviceDown && (
+          <div className="card" role="alert" style={{ borderColor: "#b45309" }}>
+            <h3 style={{ color: "#b45309" }}>{t("planner.offlineTitle")}</h3>
+            <p className="hint">{t("planner.offlineBody")}</p>
+          </div>
+        )}
+
         <div className="card">
           <h3>{t("land.title")}</h3>
           <div className="btn-row">
@@ -877,7 +1031,7 @@ export default function Planner() {
                   placeholder={t("manual.area")}
                   value={manualArea} onChange={(e) => setManualArea(e.target.value)} />
                 <select className="lang-select" value={manualUnit}
-                  onChange={(e) => setManualUnit(e.target.value as any)}>
+                  onChange={(e) => setManualUnit(e.target.value as AreaUnit)}>
                   <option value="acre">{t("manual.unitAcre")}</option>
                   <option value="hectare">{t("manual.unitHectare")}</option>
                   <option value="guntha">{t("manual.unitGuntha")}</option>
@@ -951,7 +1105,10 @@ export default function Planner() {
             <div className="kv"><span className="k">{t("intel.season")}</span>
               <span className="v">{land.climate?.season || "—"}</span></div>
             <div className="kv"><span className="k">{t("intel.rainfall")}</span>
-              <span className="v">{land.climate?.annual_rainfall_mm ?? "—"} mm ({land.climate?.rainfall_band || "—"})</span></div>
+              <span className="v">{land.climate?.annual_rainfall_mm ?? "—"} mm ({land.climate?.rainfall_band || "—"})
+                {land.climate?.annual_rainfall_normal_mm != null &&
+                  ` · ${t("intel.rainNormal", { n: Math.round(land.climate.annual_rainfall_normal_mm) })}`}
+              </span></div>
             <div className="kv"><span className="k">{t("intel.maxTemp")}</span>
               <span className="v">{land.climate?.temp_max_avg_c ?? "—"} °C</span></div>
             {elevation?.elevation_m != null && (
@@ -1000,6 +1157,16 @@ export default function Planner() {
             </div>
             <p className="hint" style={{ marginBottom: 8 }}>{t(`systems.${system}.desc`)}</p>
 
+            <p className="hint" style={{ margin: "4px 0" }}>{t("method.water")}</p>
+            <div className="sys-row">
+              {(["irrigated", "rainfed", "unknown"] as const).map((w) => (
+                <button key={w} className={"sys" + (water === w ? " active" : "")}
+                  onClick={() => changeWater(w)}>
+                  {t(`method.water_${w}`)}
+                </button>
+              ))}
+            </div>
+
             <div className="tabs">
               <button className={"tab" + (cropTab === "recommended" ? " active" : "")}
                 onClick={() => setCropTab("recommended")}>{t("method.tabRecommended")}</button>
@@ -1007,20 +1174,37 @@ export default function Planner() {
                 onClick={() => setCropTab("all")}>{t("method.tabAll")}</button>
             </div>
 
-            {cropTab === "recommended" && recs.map((r) => (
-              <div key={r.crop_id}
+            {cropTab === "recommended" && recs.map((r, i) => (
+              <div key={r.crop_id}>
+              {/* Expert-only crops follow the validated ranking, under a divider. */}
+              {r.calibrated === false && recs[i - 1]?.calibrated !== false && (
+                <p className="hint" style={{ margin: "8px 0 4px" }}>{t("method.expertGroup")}</p>
+              )}
+              <div
                 className={"crop" + (selected.includes(r.crop_id) ? " selected" : "")}
+                title={r.reasons.join("\n")}
                 onClick={() => toggleCrop(r.crop_id)}>
                 <span className="dot" style={{ background: LAYER_COLORS[r.layer] }} />
                 <div>
                   <div className="name">{r.name}</div>
-                  <div className="meta">{r.layer} · {r.category}</div>
+                  <div className="meta">
+                    {r.layer} · {r.category}
+                    {r.needs_irrigation && <span className="tag tag-water">💧 {t("method.needsIrrigation")}</span>}
+                    {r.calibrated === false && <span className="tag tag-muted">{t("method.expertOnly")}</span>}
+                  </div>
                 </div>
-                <span className={"badge " + (r.score >= 0.8 ? "high" : r.score >= 0.6 ? "ok" : "")}>
+                <span className={"badge " + badgeClass(r)}>
                   {r.suitability}
                 </span>
               </div>
+              </div>
             ))}
+            {cropTab === "recommended" && recs.length > 0 && (
+              <p className="disclaimer" style={{ marginTop: 4 }}>
+                {recs.some((r) => r.calibrated !== undefined)
+                  ? t("method.whyHint") : t("method.whyHintRules")}
+              </p>
+            )}
 
             {cropTab === "all" && (
               <>
@@ -1143,6 +1327,14 @@ export default function Planner() {
             {layout && (
               <div className="kv"><span className="k">{t("layout.totalPlants")}</span>
                 <span className="v">{layout.total_plants.toLocaleString()}{layout.truncated ? " (sampled view)" : ""}</span></div>
+            )}
+            {layout && (
+              <p className="hint" style={{ margin: "4px 0 6px" }}>
+                {t("layout.geoNote")}
+                {layout.row_orientation_deg
+                  ? " " + t("layout.rotated", { deg: Math.round(layout.row_orientation_deg) })
+                  : ""}
+              </p>
             )}
             {layout?.crops.map((c) => (
               <div className="kv" key={c.crop_id}>
@@ -1273,6 +1465,34 @@ function sparkline(values: number[]): React.ReactNode {
   );
 }
 
+/** Soil, climate and place context for /agronomy/recommend, validate and design.
+ *  Seasonal mean temperatures feed the calibrated recommender (the crop
+ *  database's temperature ranges are growing-season means); the state enables
+ *  its state-level prior; water toggles the rain-fed rainfall requirement. */
+function siteCtx(report: any, state: string | undefined,
+                 water: "unknown" | "irrigated" | "rainfed"): Record<string, unknown> {
+  const c = report?.climate;
+  return {
+    ph: report?.soil?.ph ?? undefined,
+    texture: report?.soil?.texture_class ?? undefined,
+    // 10-year normal (what the recommender was trained on), else last year's total
+    rainfall_mm: c?.annual_rainfall_normal_mm ?? c?.annual_rainfall_mm ?? undefined,
+    temp_max_c: c?.temp_max_avg_c ?? undefined,
+    tmean_kharif_c: c?.tmean_kharif_c ?? undefined,
+    tmean_rabi_c: c?.tmean_rabi_c ?? undefined,
+    tmean_zaid_c: c?.tmean_zaid_c ?? undefined,
+    season: c?.season ?? undefined,
+    state: state || undefined,
+    irrigated: water === "irrigated" ? true : water === "rainfed" ? false : undefined,
+  };
+}
+
+/** Badge colour: the calibrated model's own level, else the rule-score bands. */
+function badgeClass(r: Recommendation): string {
+  if (r.level) return r.level === "high" ? "high" : r.level === "ok" ? "ok" : "";
+  return r.score >= 0.8 ? "high" : r.score >= 0.6 ? "ok" : "";
+}
+
 function inr(n: number): string {
   const sign = n < 0 ? "-" : "";
   return `${sign}₹${Math.abs(Math.round(n)).toLocaleString("en-IN")}`;
@@ -1288,8 +1508,14 @@ function materialLine(p: PlanResult, t: (k: string) => string): string {
   return `${m.quantity} kg ${t(`material.${m.type}`)}`;
 }
 
-function emptyFC() {
-  return { type: "FeatureCollection", features: [] } as any;
+/** Typed accessor for the planner's GeoJSON overlays (draw/field/plants/heat).
+ *  Returns undefined before the style has finished loading. */
+function geoSource(m: maplibregl.Map, id: string): maplibregl.GeoJSONSource | undefined {
+  return m.getSource(id) as maplibregl.GeoJSONSource | undefined;
+}
+
+function emptyFC(): GeoJSON.FeatureCollection {
+  return { type: "FeatureCollection", features: [] };
 }
 
 function fitToRing(m: maplibregl.Map, ring: number[][]) {
@@ -1302,7 +1528,7 @@ function fitToRing(m: maplibregl.Map, ring: number[][]) {
 }
 
 function renderDraw(m: maplibregl.Map, verts: number[][]) {
-  const features: any[] = verts.map((c) => ({
+  const features: GeoJSON.Feature[] = verts.map((c) => ({
     type: "Feature", geometry: { type: "Point", coordinates: c }, properties: {},
   }));
   if (verts.length >= 2) {
@@ -1312,5 +1538,5 @@ function renderDraw(m: maplibregl.Map, verts: number[][]) {
       properties: {},
     });
   }
-  (m.getSource("draw") as any)?.setData({ type: "FeatureCollection", features });
+  geoSource(m, "draw")?.setData({ type: "FeatureCollection", features });
 }

@@ -1,29 +1,21 @@
+import { supabase } from "@/lib/supabase";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export type Geometry = { type: "Polygon"; coordinates: number[][][] };
 
-const TOKEN_KEY = "smartfarm_token";
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string | null) {
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
-}
-
-function authHeaders(): Record<string, string> {
-  const t = getToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+/** The current Supabase access token (the backend verifies it). Empty headers
+ *  when signed out, so the API answers with a 401 the caller can handle. */
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function post<T>(path: string, body: unknown, auth = false): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(auth ? authHeaders() : {}) },
+    headers: { "Content-Type": "application/json", ...(auth ? await authHeaders() : {}) },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
@@ -32,7 +24,7 @@ async function post<T>(path: string, body: unknown, auth = false): Promise<T> {
 
 async function get<T>(path: string, auth = false): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: auth ? authHeaders() : {},
+    headers: auth ? await authHeaders() : {},
   });
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
   return res.json();
@@ -52,6 +44,10 @@ export interface FieldSummary {
 export interface Recommendation {
   crop_id: string; name: string; layer: string; category: string;
   score: number; suitability: string; reasons: string[];
+  // calibrated recommender only
+  level?: "high" | "ok" | "low" | "none";
+  calibrated?: boolean;          // false: expert ranges, not in the crop statistics
+  needs_irrigation?: boolean;    // local rainfall is below its rain-fed requirement
 }
 
 export interface LayoutResult {
@@ -60,7 +56,9 @@ export interface LayoutResult {
   system?: string;
   truncated: boolean;
   crops: { crop_id: string; name: string; layer: string; plant_count: number;
-           rendered_points?: number }[];
+           rendered_points?: number;
+           count_method?: "layout" | "layout-scaled" | "geometric-estimate" | "area-estimate" }[];
+  row_orientation_deg?: number;
   planting_points: { type: "FeatureCollection"; features: any[] };
   heatmap: { grid: number; max_count: number; cells: any[] };
 }
@@ -204,10 +202,6 @@ export const api = {
       `/geo/villages?${p.toString()}`);
   },
 
-  googleAuth: (credential: string) =>
-    post<{ access_token: string; token_type: string; user: User }>(
-      "/auth/google", { credential }),
-
   ndvi: (geometry: Geometry) =>
     post<{
       configured: boolean; mean?: number | null; vigour?: string | null;
@@ -220,13 +214,15 @@ export const api = {
   design: (ctx: Record<string, unknown>) =>
     post<DesignResult>("/agronomy/design", ctx),
 
-  plan: (crop_id: string, area_m2: number, system?: string) =>
-    post<PlanResult>("/agronomy/plan", { crop_id, area_m2, system }),
+  plan: (crop_id: string, area_m2: number, system?: string,
+         geo?: { plant_count?: number; perimeter_m?: number }) =>
+    post<PlanResult>("/agronomy/plan", { crop_id, area_m2, system, ...geo }),
 
   advisoryStatus: () => get<{ configured: boolean }>("/advisory/status"),
 
-  advisoryChat: (messages: ChatMessage[], context: unknown) =>
-    post<{ reply: string }>("/advisory/chat", { messages, context }),
+  /** `language` is the UI locale — the reply language when the message's is unclear. */
+  advisoryChat: (messages: ChatMessage[], context: unknown, language?: string) =>
+    post<{ reply: string }>("/advisory/chat", { messages, context, language }),
 
   economics: (crop_ids: string[], area_m2: number, state?: string, system?: string) =>
     post<EconomicsResult>("/economics/estimate", { crop_ids, area_m2, state, system }),
@@ -262,22 +258,7 @@ export const api = {
     return res.blob();
   },
 
-  // --- auth ---
-  requestOtp: (phone: string) =>
-    post<{ sent: boolean; dev_code?: string | null }>("/auth/otp/request", { phone }),
-
-  verifyOtp: (phone: string, code: string) =>
-    post<{ access_token: string; token_type: string; user: User }>(
-      "/auth/otp/verify", { phone, code }),
-
-  register: (email: string, password: string, name?: string) =>
-    post<{ access_token: string; token_type: string; user: User }>(
-      "/auth/register", { email, password, name }),
-
-  login: (email: string, password: string) =>
-    post<{ access_token: string; token_type: string; user: User }>(
-      "/auth/login", { email, password }),
-
+  // --- auth (identity is owned by Supabase; this confirms the session) ---
   me: () => get<User>("/auth/me", true),
 
   // --- saved fields (require auth) ---
@@ -289,7 +270,7 @@ export const api = {
   deleteField: async (id: string) => {
     const res = await fetch(`${BASE}/fields/${id}`, {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: await authHeaders(),
     });
     if (!res.ok) throw new Error(`/fields/${id} -> ${res.status}`);
   },

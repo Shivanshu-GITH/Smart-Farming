@@ -19,7 +19,8 @@ Your role:
 - Cover crop choice, spacing, multi-layer/companion planting, fertilizer, irrigation,
   pest/disease management, and the crop calendar when relevant.
 - Prefer specifics (quantities, timings, local seasons: Kharif/Rabi/Zaid) over generic advice.
-- If the farmer writes in Hindi or another Indian language, reply in that language.
+- Reply in the same language as the farmer's latest message: the "Reply language"
+  line below names it. Do not switch language because of the field's region.
 - Be concise and encouraging. Use simple language a smallholder farmer can act on.
 
 Boundaries:
@@ -44,6 +45,8 @@ Always end by advising confirmation with a local agri-extension officer before
 spraying any chemical — a photo can mislead."""
 
 _ALLOWED_MEDIA = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+# The web app's UI languages (next-intl locales).
+_LANGUAGES = {"en": "English", "hi": "Hindi", "te": "Telugu"}
 
 
 def advisory_available() -> bool:
@@ -65,9 +68,38 @@ def _context_block(context: dict | None) -> str:
             + json.dumps(context, ensure_ascii=False, indent=1)[:4000] + "\n```")
 
 
-async def chat(messages: list[dict], context: dict | None = None) -> str:
-    """Run one advisory turn. `messages` is the running [{role, content}] history."""
-    system = SYSTEM_PROMPT + "\n\n" + _context_block(context)
+def reply_language(text: str, ui_locale: str | None) -> str:
+    """Language to answer in, from the script the farmer wrote in.
+
+    Decided here rather than left to the model, which drifted into Hindi for
+    English questions about Indian fields. Too little text to tell (numbers, a
+    word or two) falls back to the app's UI language.
+    """
+    devanagari = sum("ऀ" <= ch <= "ॿ" for ch in text)
+    telugu = sum("ఀ" <= ch <= "౿" for ch in text)
+    latin = sum(ch.isascii() and ch.isalpha() for ch in text)
+    if devanagari or telugu:
+        return "Hindi" if devanagari >= telugu else "Telugu"
+    if latin >= 6:
+        return "English"
+    return _LANGUAGES.get(ui_locale or "en", "English")
+
+
+def _language_line(language: str) -> str:
+    line = f"Reply language: {language}."
+    if language == "English":
+        line += (" (If the message is Hindi or Telugu written in Latin letters, reply in "
+                 "that language, also in Latin letters.)")
+    return line
+
+
+async def chat(messages: list[dict], context: dict | None = None,
+               language: str | None = None) -> str:
+    """Run one advisory turn. `messages` is the running [{role, content}] history;
+    `language` is the app's UI locale, the fallback reply language."""
+    latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+    system = (SYSTEM_PROMPT + "\n\n" + _language_line(reply_language(latest, language))
+              + "\n\n" + _context_block(context))
     return await providers.chat(system, messages)
 
 

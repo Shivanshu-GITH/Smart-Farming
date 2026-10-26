@@ -135,9 +135,13 @@ async def _claude_vision(system, image_b64, media_type, text) -> str:
 # --- Google Gemini (REST) ---
 
 def _gemini_url() -> str:
-    s = get_settings()
     return (f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{s.gemini_model}:generateContent?key={s.gemini_api_key}")
+            f"{get_settings().gemini_model}:generateContent")
+
+
+def _gemini_headers() -> dict:
+    # Header, not ?key=: a URL ends up in exception messages and logs.
+    return {"x-goog-api-key": get_settings().gemini_api_key}
 
 
 def _gemini_gen_config() -> dict:
@@ -166,7 +170,7 @@ async def _gemini_chat(system: str, messages: list[dict]) -> str:
         "generationConfig": _gemini_gen_config(),
     }
     async with httpx.AsyncClient(timeout=40) as client:
-        resp = await client.post(_gemini_url(), json=body)
+        resp = await client.post(_gemini_url(), json=body, headers=_gemini_headers())
         resp.raise_for_status()
         return _gemini_text(resp.json())
 
@@ -180,7 +184,7 @@ async def _gemini_vision(system, image_b64, media_type, text) -> str:
         "generationConfig": _gemini_gen_config(),
     }
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(_gemini_url(), json=body)
+        resp = await client.post(_gemini_url(), json=body, headers=_gemini_headers())
         resp.raise_for_status()
         return _gemini_text(resp.json())
 

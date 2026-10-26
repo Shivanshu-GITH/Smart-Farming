@@ -32,14 +32,18 @@ async def generate_report(geometry: dict, crop_ids: list[str],
     )
 
     area_m2 = summary["area"]["square_meters"]
+    layout = generate_layout(geometry, crop_ids, system) if crop_ids else None
+    # plant counts in the plans come from the layout, so the report's
+    # planting-material list matches the positions it draws
+    laid_out = {c["crop_id"]: c["plant_count"] for c in (layout or {}).get("crops", [])}
     plans = []
     for cid in crop_ids:
         try:
-            plans.append(build_plan(cid, area_m2, system=system))
+            plans.append(build_plan(cid, area_m2, system=system,
+                                    perimeter_m=summary.get("perimeter_meters"),
+                                    plant_count=laid_out.get(cid)))
         except ValueError:
             continue  # unknown crop id — skip rather than fail the whole report
-
-    layout = generate_layout(geometry, crop_ids, system) if crop_ids else None
 
     economics = None
     if crop_ids:

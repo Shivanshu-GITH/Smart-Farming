@@ -23,17 +23,28 @@ from __future__ import annotations
 import math
 from typing import Callable
 
+import numpy as np
+import shapely
+from shapely import affinity
 from shapely.geometry import Point
 from shapely.prepared import prep
 
+from app.agronomy import counts
 from app.agronomy.catalogue import get_crop, layers, usable_fraction
-from app.core.geo import centroid_latlon, geodesic_area_m2, polygon_from_geojson
+from app.core.geo import (centroid_latlon, geodesic_area_m2, geodesic_perimeter_m,
+                          polygon_from_geojson)
 
 # Rendering cap per crop. Grids denser than this are uniformly thinned so the
 # display stays representative of the whole field.
 MAX_POINTS = 3500
 
 SYSTEMS = ("monoculture", "intercrop", "multilayer")
+
+# Grid-position search (geometry-aware mode) only for widely spaced crops: on
+# real smallholder fields it adds up to ~10% more tree positions on the
+# smallest plots, and <1% for row crops, where it isn't worth the work.
+WIDE_SPACING_M = 1.0
+_PHASES = (0.0, 1 / 3, 2 / 3)
 
 
 def _meters_per_degree(lat: float) -> tuple[float, float]:
@@ -95,6 +106,99 @@ def _estimate_count(area_m2: float, crop: dict, share: float = 1.0) -> int:
 
 def _layer_rank(crop: dict) -> int:
     return layers().get(crop["layer"], {}).get("order", 0)
+
+
+# --- geometry-aware helpers (metres, local frame) ------------------------------
+
+def _local_frame(polygon):
+    """Polygon in a local metric frame centred on it, plus point converters."""
+    lon0, lat0 = polygon.centroid.x, polygon.centroid.y
+    m_lon, m_lat = _meters_per_degree(lat0)
+
+    def fwd(lon, lat):
+        return (np.asarray(lon) - lon0) * m_lon, (np.asarray(lat) - lat0) * m_lat
+
+    def inv(x, y):
+        return np.asarray(x) / m_lon + lon0, np.asarray(y) / m_lat + lat0
+
+    local = shapely.transform(polygon, lambda xy: np.column_stack(fwd(xy[:, 0], xy[:, 1])))
+    return local, fwd, inv
+
+
+def _mrr_angle(local) -> float:
+    """Orientation of the long side of the minimum rotated rectangle, [0, 180)."""
+    xy = np.asarray(shapely.minimum_rotated_rectangle(local).exterior.coords)[:4]
+    e1, e2 = xy[1] - xy[0], xy[2] - xy[1]
+    long_e = e1 if np.hypot(*e1) >= np.hypot(*e2) else e2
+    return math.degrees(math.atan2(long_e[1], long_e[0])) % 180.0
+
+
+def _grid_in(target, frame, plant: float, row: float, theta: float,
+             fx: float, fy: float) -> np.ndarray:
+    """Staggered grid laid over `frame`'s bounds (as the engine lays it), rotated
+    by theta and shifted by (fx, fy) of a step; returns the points in `target`."""
+    F = affinity.rotate(frame, -theta, origin=(0, 0)) if theta else frame
+    T = affinity.rotate(target, -theta, origin=(0, 0)) if theta else target
+    if T.is_empty:
+        return np.empty((0, 2))
+    minx, miny, maxx, maxy = F.bounds
+    ys = miny + fy * row + np.arange(int((maxy - miny) / row) + 2) * row
+    ys = ys[ys <= maxy]
+    xs = minx + fx * plant + np.arange(int((maxx - minx) / plant) + 2) * plant
+    X = np.broadcast_to(xs, (len(ys), len(xs))).copy()
+    X[1::2] += plant / 2
+    Y = np.broadcast_to(ys[:, None], X.shape)
+    keep = X <= maxx
+    X, Y = X[keep], Y[keep]
+    shapely.prepare(T)
+    inside = shapely.contains_xy(T, X, Y)
+    pts = np.column_stack([X[inside], Y[inside]])
+    if theta:
+        c, s = math.cos(math.radians(theta)), math.sin(math.radians(theta))
+        pts = pts @ np.array([[c, s], [-s, c]])
+    return pts
+
+
+def _place_monoculture_geo(polygon, crop: dict):
+    """Monoculture with the border setback and, for widely spaced crops, the
+    best of the default grid, grid shifts and MRR-aligned grids (never fewer
+    plants than the default grid). Returns (points, stride, orientation)."""
+    local, _fwd, inv = _local_frame(polygon)
+    plant, row = crop["spacing_cm"]["plant"] / 100.0, crop["spacing_cm"]["row"] / 100.0
+    inner = local.buffer(-counts.setback_m(crop))
+    cells = inner.area / (plant * row) if not inner.is_empty else 0
+    stride = 1 if cells <= MAX_POINTS else math.ceil(math.sqrt(cells / MAX_POINTS))
+    cands = [(0.0, 0.0, 0.0)]
+    if stride == 1 and min(plant, row) >= WIDE_SPACING_M:
+        a = _mrr_angle(local)
+        cands += [(t, fx, fy) for t in (0.0, a, (a + 90) % 180)
+                  for fx in _PHASES for fy in _PHASES][1:]
+    best, theta = None, 0.0
+    for t, fx, fy in cands:
+        pts = _grid_in(inner, local, plant * stride, row * stride, t, fx, fy)
+        if best is None or len(pts) > len(best):   # ties keep the default grid
+            best, theta = pts, t
+    lon, lat = inv(best[:, 0], best[:, 1])
+    return [(round(float(x), 7), round(float(y), 7)) for x, y in zip(lon, lat)], stride, theta
+
+
+def _apply_setback(polygon, placed: list) -> list:
+    """Drop positions closer than the crop's setback to the field boundary."""
+    local, fwd, _inv = _local_frame(polygon)
+    out = []
+    for crop, pts, stride, share in placed:
+        if pts:
+            inner = local.buffer(-counts.setback_m(crop))
+            if inner.is_empty:
+                pts = []
+            else:
+                arr = np.asarray(pts)
+                x, y = fwd(arr[:, 0], arr[:, 1])
+                shapely.prepare(inner)
+                keep = shapely.contains_xy(inner, x, y)
+                pts = [p for p, k in zip(pts, keep) if k]
+        out.append((crop, pts, stride, share))
+    return out
 
 
 # --- system-specific placement -------------------------------------------------
@@ -204,7 +308,16 @@ def _place_intercrop(polygon, crops: list[dict], lat: float):
 # --- public API -----------------------------------------------------------------
 
 def generate_layout(geometry: dict, crop_ids: list[str],
-                    system: str = "multilayer") -> dict:
+                    system: str = "multilayer", geometry_aware: bool = True) -> dict:
+    """Plant positions + counts for a field.
+
+    geometry_aware (default): plant centres keep a border setback of half a row
+    spacing; widely spaced monocultures get the best grid position/orientation;
+    counts are what the layout actually holds (the closed-form geometric
+    estimate when the display is thinned). geometry_aware=False reproduces the
+    original engine — area x usable_fraction counts, no setback — so the
+    research evaluating that behaviour stays reproducible.
+    """
     if system not in SYSTEMS:
         raise ValueError(f"Unknown farming system '{system}'")
 
@@ -213,20 +326,39 @@ def generate_layout(geometry: dict, crop_ids: list[str],
     # plant counts are computed on the PLANTING area (gross minus bunds, paths
     # and irrigation space for this system), not the gross polygon area
     fraction = usable_fraction(system)
-    area_m2 = geodesic_area_m2(polygon) * fraction
+    gross_m2 = geodesic_area_m2(polygon)
+    perimeter_m = geodesic_perimeter_m(polygon)
+    area_m2 = gross_m2 * fraction
 
     crops = [c for c in (get_crop(cid) for cid in crop_ids) if c is not None]
     if system == "monoculture":
         crops = crops[:1]
 
+    orientation = 0.0
     if not crops:
         placed = []
     elif system == "monoculture":
-        placed = _place_monoculture(polygon, crops, lat)
+        if geometry_aware:
+            pts, stride, orientation = _place_monoculture_geo(polygon, crops[0])
+            placed = [(crops[0], pts, stride, 1.0)]
+        else:
+            placed = _place_monoculture(polygon, crops, lat)
     elif system == "intercrop":
         placed = _place_intercrop(polygon, crops, lat)
     else:
         placed = _place_multilayer(polygon, crops, lat)
+    if geometry_aware and system != "monoculture":
+        placed = _apply_setback(polygon, placed)
+
+    def count(crop, pts, stride, share) -> tuple[int, str]:
+        if not geometry_aware:
+            return _estimate_count(area_m2, crop, share), "area-estimate"
+        if stride == 1:
+            return len(pts), "layout"
+        if system == "multilayer":
+            # corridors and tree clearance are in the thinned layout too
+            return len(pts) * stride * stride, "layout-scaled"
+        return counts.geometric_count(crop, gross_m2, perimeter_m, share), "geometric-estimate"
 
     features: list[dict] = []
     per_crop: list[dict] = []
@@ -244,11 +376,13 @@ def generate_layout(geometry: dict, crop_ids: list[str],
                     "layer": crop["layer"],
                 },
             })
+        n, method = count(crop, pts, stride, share)
         per_crop.append({
             "crop_id": crop["id"],
             "name": crop["name"],
             "layer": crop["layer"],
-            "plant_count": _estimate_count(area_m2, crop, share),
+            "plant_count": n,
+            "count_method": method,
             "rendered_points": len(pts),
             "spacing_cm": crop["spacing_cm"],
         })
@@ -258,6 +392,9 @@ def generate_layout(geometry: dict, crop_ids: list[str],
     return {
         "type": "layout",
         "system": system,
+        "geometry_aware": geometry_aware,
+        "setback_fraction_of_row": counts.SETBACK_FRAC if geometry_aware else 0.0,
+        "row_orientation_deg": round(orientation, 1),
         "usable_fraction": fraction,
         "crops": per_crop,
         "total_plants": sum(c["plant_count"] for c in per_crop),

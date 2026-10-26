@@ -106,7 +106,8 @@ def _banned_against(selected: list[dict]) -> set[str]:
 
 
 def suggest_fillers(crop_ids: list[str], *, ph=None, texture=None, rainfall=None,
-                    temp_max=None, season=None, per_layer: int = 2) -> dict:
+                    temp_max=None, season=None, per_layer: int = 2,
+                    tmean: dict | None = None) -> dict:
     """For each empty vertical layer, suggest land-suitable, non-antagonist crops
     (companions of the current selection ranked first)."""
     selected = [c for _cid, c in _resolve(crop_ids)]
@@ -132,7 +133,7 @@ def suggest_fillers(crop_ids: list[str], *, ph=None, texture=None, rainfall=None
             if season and season not in cand["seasons"]:
                 continue  # must be plantable in the target season
             s = score_crop(cand, ph=ph, texture=texture, rainfall=rainfall,
-                           temp_max=temp_max, season=season)
+                           temp_max=temp_max, season=season, tmean=tmean)
             links = companion_link(cand)
             s["companion_with"] = links
             s["combo_score"] = round(min(1.0, s["score"] + (0.1 if links else 0.0)), 3)

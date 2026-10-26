@@ -23,13 +23,28 @@
     "or": "or",
     "goSignup": "New to SmartFarm? Create an account",
     "goLogin": "Already have an account? Log in",
+    "continueWithGoogle": "Continue with Google",
+    "signingIn": "Signing in…",
+    "creatingAccount": "Creating account…",
+    "checkEmailTitle": "Confirm your email",
+    "checkEmailBody": "We sent a confirmation link to {email}. Click it to activate your account, then sign in.",
+    "googleError": "Could not start Google sign-in. Please try again.",
     "backToApp": "← Back to the map"
   },
   "map": {
     "search": "Search village, town or place…",
     "go": "Search",
     "noResults": "No places found",
-    "labels": "Place names, roads & borders"
+    "labels": "Place names, roads & borders",
+    "finderBtn": "My village",
+    "locateBtn": "My location",
+    "locating": "Finding you…",
+    "locateAccuracy": "Accurate to about {n} m",
+    "youAreHere": "You are here",
+    "locateUnsupported": "This device cannot share its location.",
+    "locateDenied": "Location permission denied. Allow location access in your browser to use this.",
+    "locateFailed": "Could not get your location. Check that GPS is on and try again.",
+    "labelsBtn": "Labels"
   },
   "finder": {
     "title": "Find my area — step by step",
@@ -42,7 +57,12 @@
     "loadingVillages": "Loading the village list of this district…",
     "villageCount": "{n} villages & towns in this district — type to filter, tap one to jump there",
     "noVillageList": "Village list unavailable right now — type the name and press Go",
-    "hint": "Pick your state and district, then choose your village from the list (or type it) — the search stays inside your district so small places are found. Then zoom on the satellite image to spot your field."
+    "hint": "Pick your state and district, then choose your village from the list (or type it) — the search stays inside your district so small places are found. Then zoom on the satellite image to spot your field.",
+    "villageMore": "… {n} more — type the name below to find them"
+  },
+  "planner": {
+    "offlineTitle": "Planning service unavailable",
+    "offlineBody": "The farm planner cannot reach its service right now, so soil, crop and layout results will not load. Please try again in a moment."
   },
   "material": {
     "seed": "seed",
@@ -57,7 +77,16 @@
     "tabRecommended": "Recommended",
     "tabAll": "All crops",
     "searchCrops": "Search crops…",
-    "planOnly": "📋 Get crop plan & economics"
+    "planOnly": "📋 Get crop plan & economics",
+    "water": "Water source",
+    "water_irrigated": "Irrigated",
+    "water_rainfed": "Rain-fed",
+    "water_unknown": "Not sure",
+    "needsIrrigation": "needs irrigation",
+    "expertOnly": "expert estimate",
+    "whyHint": "Ranked by where each crop is actually grown in India (district crop statistics). Hover a crop to see why.",
+    "whyHintRules": "Multi-layer suggestions use expert crop ranges with seasonal temperatures — the district crop statistics don't cover multi-layer systems. Hover a crop to see why.",
+    "expertGroup": "Other crops — expert ranges (not in the district crop statistics):"
   },
   "systems": {
     "monoculture": { "name": "Single crop", "desc": "One crop across the whole field — paddy, wheat, cotton and other staples. Simplest to manage." },
@@ -91,7 +120,8 @@
     "soilTexture": "Soil texture", "soilPh": "Soil pH", "season": "Season",
     "rainfall": "Rainfall", "maxTemp": "Max temp", "ndvi": "NDVI (vigour)",
     "elevation": "Elevation", "slope": "Slope", "ndviKey": "needs Sentinel Hub key",
-    "disclaimer": "Soil from SoilGrids (~250 m estimate). Verify with a local soil test."
+    "disclaimer": "Soil from SoilGrids (~250 m estimate). Verify with a local soil test.",
+    "rainNormal": "10-yr normal {n} mm"
   },
   "recommend": {
     "title": "3 · Recommended crops — pick your layers",
@@ -108,7 +138,9 @@
     "showHeatmap": "Show density heatmap", "calendar": "Crop calendar & inputs",
     "seed": "seed", "downloadPdf": "📄 Download PDF report", "preparing": "Preparing…",
     "savePlan": "💾 Save plan & layout to field", "savePlanDone": "Saved to your field ✓",
-    "savePlanHint": "Save this field first to keep its plan."
+    "savePlanHint": "Save this field first to keep its plan.",
+    "geoNote": "Plants sit half a row-spacing inside the boundary; counts are the plants that actually fit this field.",
+    "rotated": "Rows turned {deg}° to fit more plants."
   },
   "profit": {
     "title": "5 · Profit estimate", "inputCost": "Total input cost",

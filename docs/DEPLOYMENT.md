@@ -56,17 +56,13 @@ Key facts that shape deployment:
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `ENVIRONMENT` | `development` | Set to `production` — refuses the insecure JWT default and never echoes OTP codes. |
+| `ENVIRONMENT` | `development` | Set to `production`. |
 | `DATABASE_URL` | sqlite file | Prod: `postgresql+psycopg://user:pass@host:5432/smartfarm`. Empty = fully stateless. |
 | `REDIS_URL` | empty | `redis://host:6379/0`. Empty = in-process cache. |
-| `JWT_SECRET` | insecure default | **Must change in prod.** Generate a strong random value (see §7). |
-| `JWT_EXPIRE_MINUTES` | `10080` (7d) | Session length. |
-| `OTP_DEV_MODE` | `true` | **Set `false` in prod** (otherwise OTP codes come back in the API response). Requires an SMS gateway to be wired up before real users can log in via phone. |
-| `OTP_TTL_SECONDS` | `300` | OTP validity window. |
+| `SUPABASE_URL` | empty | `https://<project-ref>.supabase.co`. The API verifies Supabase access tokens against this project's public JWKS — no secret needed. Empty disables login (compute still works; saving returns 401). |
+| `SUPABASE_JWT_SECRET` | empty | Only for legacy Supabase projects that still sign with HS256. Leave empty otherwise. |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of web origins allowed to call the API. Set to your web domain(s). |
-| `GOOGLE_CLIENT_ID` | empty | OAuth "Web application" client ID; same value goes to the web app. Empty disables `/auth/google`. |
 | `ADMIN_TOKEN` | empty | Gates `/admin/*` analytics. Empty disables it. |
-| `KADAPALA_SSO_SECRET` | empty | Shared secret for SSO from the Kadapala Groups site. Empty disables `/auth/sso`. |
 
 **Optional external data providers (all free-tier capable, all skippable):**
 
@@ -82,7 +78,19 @@ Key facts that shape deployment:
 | Var | Purpose |
 |-----|---------|
 | `NEXT_PUBLIC_API_URL` | Public URL of the API (e.g. `https://api.smartfarm.example`). **Baked at build time.** |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Same OAuth client ID as the API's `GOOGLE_CLIENT_ID`. Empty hides the Google button. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Same Supabase project URL as the API's `SUPABASE_URL`. **Baked at build time.** |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The project's anon / publishable key (browser-safe). Never put the `service_role` key here. **Baked at build time.** |
+
+### Supabase project setup (one time)
+
+1. **Authentication → Providers:** enable *Email*; enable *Google* and paste the
+   Google OAuth client ID/secret (Google Cloud console → Credentials → OAuth client,
+   type *Web application*).
+2. In that Google OAuth client, add the **Authorized redirect URI**
+   `https://<project-ref>.supabase.co/auth/v1/callback`.
+3. **Authentication → URL Configuration:** set *Site URL* to your web origin
+   (e.g. `https://smartfarm.example`) and add it, plus `http://localhost:3000`
+   for dev, to *Redirect URLs*. Sign-in redirects anywhere else are rejected.
 
 ---
 
@@ -102,8 +110,8 @@ Compose reads variables from the environment or an `.env` file **next to** the
 compose file, i.e. `infra/.env`:
 ```bash
 cat > infra/.env <<'EOF'
-JWT_SECRET=<paste a strong random value>
-OTP_DEV_MODE=false
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_ANON_KEY=<anon / publishable key>
 NEXT_PUBLIC_API_URL=https://api.smartfarm.example
 # Optional providers — leave blank to skip:
 ANTHROPIC_API_KEY=
@@ -128,7 +136,8 @@ This will:
 1. Start Postgres (PostGIS) and Redis, wait for Postgres to be healthy.
 2. Build the API image (context = repo root, so `packages/` is included).
 3. Run `alembic upgrade head`, then serve Uvicorn on `:8000`.
-4. Build the web image with `NEXT_PUBLIC_API_URL` baked in, serve on `:3000`.
+4. Build the web image with `NEXT_PUBLIC_API_URL` and the Supabase URL/anon key
+   baked in, serve on `:3000`.
 
 ### Step 4 — Verify
 ```bash
@@ -184,8 +193,8 @@ the driver prefix to `postgresql+psycopg://…`.
   ```
   (The Dockerfile's default CMD serves on 8000 without migrating — override it as
   above so Postgres migrations run.)
-- **Env vars:** set `ENVIRONMENT=production`, `DATABASE_URL`, `JWT_SECRET`,
-  `OTP_DEV_MODE=false`, `CORS_ORIGINS=https://<your-vercel-domain>`, plus any
+- **Env vars:** set `ENVIRONMENT=production`, `DATABASE_URL`, `SUPABASE_URL`,
+  `CORS_ORIGINS=https://<your-vercel-domain>`, plus any
   provider keys and `REDIS_URL` if you added Redis.
 - **Health check path:** `/health`.
 
@@ -193,14 +202,14 @@ the driver prefix to `postgresql+psycopg://…`.
 - Import the repo, set **Root Directory = `apps/web`**. Framework auto-detects
   Next.js; build `next build`, output served by `next start` (or Vercel's
   serverless output).
-- **Environment variables** (Production): `NEXT_PUBLIC_API_URL=https://<api-host>`
-  and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` if using Google login.
-- Redeploy after changing either — `NEXT_PUBLIC_*` is build-time only.
+- **Environment variables** (Production): `NEXT_PUBLIC_API_URL=https://<api-host>`,
+  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- Redeploy after changing any of them — `NEXT_PUBLIC_*` is build-time only.
 
-### 6d. Wire CORS + OAuth
+### 6d. Wire CORS + auth redirects
 - API `CORS_ORIGINS` must include the exact Vercel domain (and any custom domain).
-- If using Google login, add both the web domain and `http://localhost:3000` (dev)
-  to **Authorized JavaScript origins** in the Google Cloud OAuth client.
+- In Supabase → Authentication → URL Configuration, set *Site URL* to the Vercel /
+  custom domain and add it to *Redirect URLs* (see §4, Supabase project setup).
 
 ---
 
@@ -211,7 +220,7 @@ the driver prefix to `postgresql+psycopg://…`.
 cd apps/api
 python -m venv .venv && source .venv/Scripts/activate   # or .venv/bin/activate on Linux
 pip install -r requirements.txt
-cp .env.example .env        # then edit — set DATABASE_URL, JWT_SECRET, ENVIRONMENT=production
+cp .env.example .env        # then edit — set DATABASE_URL, SUPABASE_URL, ENVIRONMENT=production
 python -m alembic upgrade head   # only if using Postgres
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
@@ -221,7 +230,7 @@ Run it under a process manager (systemd / supervisor). Put Uvicorn behind Nginx.
 ```bash
 cd apps/web
 npm ci
-cp .env.local.example .env.local   # set NEXT_PUBLIC_API_URL
+cp .env.local.example .env.local   # set NEXT_PUBLIC_API_URL + NEXT_PUBLIC_SUPABASE_*
 npm run build
 npm run start -- -p 3000           # or PORT=3000 npm start
 ```
@@ -233,15 +242,12 @@ Serve under a process manager and reverse-proxy with TLS.
 
 Before real users touch it, confirm **all** of these:
 
-- [ ] `ENVIRONMENT=production` (the app will **refuse to boot** if `JWT_SECRET` is
-      still the insecure default — this is intentional).
-- [ ] `JWT_SECRET` set to a strong random value. Generate one:
-      ```bash
-      python -c "import secrets; print(secrets.token_urlsafe(48))"
-      ```
-      Keep it stable across restarts/instances or all sessions invalidate.
-- [ ] `OTP_DEV_MODE=false`. (Real phone login also needs an SMS gateway wired up;
-      until then, use Google login or provision an SMS provider.)
+- [ ] `ENVIRONMENT=production`.
+- [ ] `SUPABASE_URL` (API) and `NEXT_PUBLIC_SUPABASE_URL` (web) point at the **same**
+      Supabase project; the web uses only the anon key. The `service_role` key,
+      database password and JWT secret are never needed by this app — keep them
+      out of every `.env`.
+- [ ] Supabase *Site URL* / *Redirect URLs* list only your real web origin(s).
 - [ ] `CORS_ORIGINS` lists only your real web origin(s) — no `*`, no localhost in prod.
 - [ ] `DATABASE_URL` points at managed Postgres with backups enabled.
 - [ ] Ports 8000/3000 are **not** publicly exposed; only the TLS proxy is.
@@ -279,13 +285,13 @@ recommendation, and advisory (if keys are set).
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| API won't start, `RuntimeError: JWT_SECRET is still the insecure default` | You set `ENVIRONMENT=production` without a real `JWT_SECRET`. Set one. |
 | `persistence: false` at `/` | `DATABASE_URL` empty or unreachable. Compute still works; saving fields returns 503. |
 | Docker API build fails on missing `packages/` | Build context wasn't the repo root. Use `-f apps/api/Dockerfile .` from root (compose already does this). |
 | Web calls go to `localhost:8000` in production | `NEXT_PUBLIC_API_URL` wasn't set at **build** time. Rebuild the web image/deploy with the right value. |
 | CORS errors in browser console | `CORS_ORIGINS` doesn't exactly match the web origin (scheme + host + port). |
-| Google button missing | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (web) and `GOOGLE_CLIENT_ID` (API) not both set, or origin not authorized in Google Cloud console. |
-| OTP codes appearing in API responses | `OTP_DEV_MODE` still `true`. Set `false` for production. |
+| Sign-in page says auth is not configured | `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` weren't set at **build** time. Rebuild. |
+| Signed in, but saving a field returns 401 | API `SUPABASE_URL` empty or a different project from the web's. |
+| Google sign-in ends on "redirect not allowed" / wrong site | Web origin missing from Supabase *Redirect URLs*, or the Supabase callback URL missing from the Google OAuth client. |
 | Postgres tables missing | Alembic didn't run. Run `python -m alembic upgrade head` (SQLite auto-creates; Postgres does not). |
 | NDVI / mandi / advisory returns fallback data | Corresponding provider key not set — expected, safe degradation. |
 

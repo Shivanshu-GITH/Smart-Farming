@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api, type ChatMessage } from "@/lib/api";
 
 export default function AdvisoryChat({ context }: { context: unknown }) {
@@ -13,6 +13,7 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const t = useTranslations("chat");
+  const locale = useLocale();
 
   useEffect(() => {
     if (open && configured === null) {
@@ -32,7 +33,7 @@ export default function AdvisoryChat({ context }: { context: unknown }) {
     setInput("");
     setBusy(true);
     try {
-      const { reply } = await api.advisoryChat(next, context);
+      const { reply } = await api.advisoryChat(next, context, locale);
       setMessages([...next, { role: "assistant", content: reply }]);
     } catch {
       setMessages([...next, { role: "assistant", content: t("error") }]);

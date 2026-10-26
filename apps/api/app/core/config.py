@@ -1,29 +1,36 @@
 """Application configuration, loaded from environment / .env."""
 from __future__ import annotations
 
-import logging
-import secrets
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_INSECURE_JWT_DEFAULT = "dev-insecure-change-me"
-
-log = logging.getLogger("smartfarm.config")
+# apps/api — so .env and a relative SQLite file are found wherever the server
+# is started from (a relative ".env" silently loaded nothing from another cwd).
+API_DIR = Path(__file__).resolve().parents[2]
+_SQLITE_RELATIVE = "sqlite+aiosqlite:///./"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=API_DIR / ".env", extra="ignore")
 
     app_name: str = "SmartFarm API"
     version: str = "0.1.0"
-    # "development" or "production". Production refuses the insecure JWT
-    # default and never echoes OTP codes, whatever otp_dev_mode says.
+    # "development" or "production" (tune logging / error verbosity).
     environment: str = "development"
 
     # Persistence / cache (all optional — empty means "run without it")
     database_url: str = ""
     redis_url: str = ""
+
+    @field_validator("database_url")
+    @classmethod
+    def _anchor_sqlite(cls, v: str) -> str:
+        if v.startswith(_SQLITE_RELATIVE):
+            return "sqlite+aiosqlite:///" + (API_DIR / v[len(_SQLITE_RELATIVE):]).as_posix()
+        return v
 
     # External providers
     openweather_api_key: str = ""
@@ -55,25 +62,19 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
-    # Google sign-in: OAuth client ID from console.cloud.google.com (free).
-    # Empty disables /auth/google. The SAME id goes to the frontend as
-    # NEXT_PUBLIC_GOOGLE_CLIENT_ID so the button renders.
-    google_client_id: str = ""
+    # Authentication is delegated to Supabase (email + Google sign-in). The API
+    # verifies the Supabase access token on every authenticated request; it never
+    # issues its own token.
+    #   SUPABASE_URL = https://<project-ref>.supabase.co
+    # Tokens are verified against the project's public JWKS (asymmetric ES256 /
+    # RS256), so no secret is needed. Legacy HS256-only projects can instead set
+    # SUPABASE_JWT_SECRET (Project Settings -> API -> JWT secret).
+    supabase_url: str = ""
+    supabase_jwt_aud: str = "authenticated"
+    supabase_jwt_secret: str = ""
 
-    # Auth (phone/OTP + JWT). CHANGE jwt_secret in production.
-    jwt_secret: str = _INSECURE_JWT_DEFAULT
-    jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
-    otp_ttl_seconds: int = 300  # OTP valid for 5 minutes
-    # In dev (no SMS gateway) the requested OTP is returned in the API response
-    # and logged, so you can sign in without a phone. NEVER enable in production.
-    otp_dev_mode: bool = True
     # Admin analytics endpoint gate (empty disables /admin/*).
     admin_token: str = ""
-    # Shared secret for SSO tokens issued by the Kadapala Groups site (empty
-    # disables /auth/sso). Kadapala signs a short JWT with this secret; we verify
-    # it and mint our own session. See project integration notes.
-    kadapala_sso_secret: str = ""
 
     # CORS
     cors_origins: str = "http://localhost:3000"
@@ -86,18 +87,9 @@ class Settings(BaseSettings):
     def persistence_enabled(self) -> bool:
         return bool(self.database_url)
 
-    def model_post_init(self, __context) -> None:
-        if self.jwt_secret != _INSECURE_JWT_DEFAULT:
-            return
-        if self.environment.lower().startswith("prod"):
-            raise RuntimeError(
-                "JWT_SECRET is still the insecure default — set a strong "
-                "random value before running with ENVIRONMENT=production.")
-        # Dev/zero-config: a per-process random secret keeps tokens unforgeable.
-        # Sessions won't survive a restart until JWT_SECRET is set explicitly.
-        self.jwt_secret = secrets.token_urlsafe(32)
-        log.warning("JWT_SECRET not set — using a random per-process secret; "
-                    "sessions will not survive restarts.")
+    @property
+    def auth_enabled(self) -> bool:
+        return bool(self.supabase_url)
 
 
 @lru_cache

@@ -11,6 +11,7 @@ other providers, so the app stays runnable out of the box.
 from __future__ import annotations
 
 import datetime as dt
+import math
 
 import httpx
 
@@ -37,21 +38,35 @@ def _sh_urls() -> tuple[str, str]:
                      else f"{base}/oauth/token")
     return token_url, f"{base}/api/v1/statistics"
 
+# FLOAT32 keeps NDVI's -1..1 range intact. Pixels the L2A scene
+# classification marks as cloud shadow (3), cloud (8, 9), cirrus (10) or snow
+# (11) are masked out: they are not a vegetation reading.
 _EVALSCRIPT = """//VERSION=3
 function setup() {
   return {
-    input: [{ bands: ["B04", "B08", "dataMask"] }],
+    input: [{ bands: ["B04", "B08", "SCL", "dataMask"] }],
     output: [
-      { id: "ndvi", bands: 1 },
+      { id: "ndvi", bands: 1, sampleType: "FLOAT32" },
       { id: "dataMask", bands: 1 }
     ]
   };
 }
 function evaluatePixel(s) {
+  let clear = [3, 8, 9, 10, 11].indexOf(s.SCL) === -1;
   let ndvi = (s.B08 - s.B04) / (s.B08 + s.B04);
-  return { ndvi: [ndvi], dataMask: [s.dataMask] };
+  return { ndvi: [ndvi], dataMask: [s.dataMask && clear ? 1 : 0] };
 }
 """
+
+# A pass counts only if at least this share of the field's pixels is clear;
+# a mean over a few gaps between clouds is not the field's NDVI.
+MIN_CLEAR_FRACTION = 0.3
+
+
+def _resolution_deg(lat: float, metres: float = 10.0) -> tuple[float, float]:
+    """(resx, resy) in degrees for ~`metres` pixels: the request CRS is EPSG:4326,
+    whose units are degrees, so a bare 10 would mean 10-degree pixels."""
+    return metres / (111_320 * math.cos(math.radians(lat))), metres / 110_574
 
 
 def _vigour(mean: float | None) -> str | None:
@@ -103,13 +118,14 @@ async def get_ndvi(geometry: dict) -> dict:
 
     # NDVI shifts over the season — cache by centroid + current month.
     month = dt.date.today().strftime("%Y-%m")
-    key = f"{cache.geo_key('ndvi', lat, lon, precision=3)}:{month}"
+    key = f"{cache.geo_key('ndvi2', lat, lon, precision=3)}:{month}"
     cached = await cache.get(key)
     if cached is not None:
         return cached
 
     end = dt.date.today()
     start = end - dt.timedelta(days=90)
+    resx, resy = _resolution_deg(lat)
     body = {
         "input": {
             "bounds": {
@@ -130,8 +146,8 @@ async def get_ndvi(geometry: dict) -> dict:
             },
             "aggregationInterval": {"of": "P15D"},
             "evalscript": _EVALSCRIPT,
-            "resx": 10,
-            "resy": 10,
+            "resx": resx,
+            "resy": resy,
         },
         "calculations": {"ndvi": {"statistics": {"default": {}}}},
     }
@@ -191,13 +207,14 @@ async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
         result["note"] = "NDVI needs Sentinel Hub credentials."
         return result
 
-    key = f"{cache.geo_key('ndvi-series', lat, lon, precision=3)}:{months}:{dt.date.today():%Y-%m}"
+    key = f"{cache.geo_key('ndvi2-series', lat, lon, precision=3)}:{months}:{dt.date.today():%Y-%m}"
     cached = await cache.get(key)
     if cached is not None:
         return cached
 
     end = dt.date.today()
     start = end - dt.timedelta(days=months * 30)
+    resx, resy = _resolution_deg(lat)
     body = {
         "input": {
             "bounds": {"geometry": geometry,
@@ -208,7 +225,7 @@ async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
             "timeRange": {"from": f"{start.isoformat()}T00:00:00Z",
                           "to": f"{end.isoformat()}T23:59:59Z"},
             "aggregationInterval": {"of": "P15D"},
-            "evalscript": _EVALSCRIPT, "resx": 10, "resy": 10,
+            "evalscript": _EVALSCRIPT, "resx": resx, "resy": resy,
         },
         "calculations": {"ndvi": {"statistics": {"default": {}}}},
     }
@@ -229,12 +246,10 @@ async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
 
     series = []
     for item in data.get("data", []):
-        stats = item.get("outputs", {}).get("ndvi", {}).get("bands", {}).get("B0", {}).get("stats", {})
-        mean = stats.get("mean")
-        # cloudy/no-data intervals report a non-numeric mean (e.g. "NaN") — skip
-        if isinstance(mean, (int, float)) and stats.get("sampleCount", 1) != 0:
+        stats = _stats(item)
+        if _usable(stats):
             series.append({"date": item.get("interval", {}).get("from", "")[:10],
-                           "mean": round(mean, 3)})
+                           "mean": round(stats["mean"], 3)})
     result["series"] = series
     if len(series) >= 2:
         result["trend"] = "improving" if series[-1]["mean"] > series[0]["mean"] else "declining"
@@ -242,13 +257,23 @@ async def get_ndvi_series(geometry: dict, months: int = 6) -> dict:
     return result
 
 
+def _stats(item: dict) -> dict:
+    return item.get("outputs", {}).get("ndvi", {}).get("bands", {}).get("B0", {}).get("stats", {})
+
+
+def _usable(stats: dict) -> bool:
+    """Numeric mean (all-nodata intervals report "NaN") over a mostly clear field."""
+    if not isinstance(stats.get("mean"), (int, float)):
+        return False
+    samples = stats.get("sampleCount") or 0
+    clear = samples - (stats.get("noDataCount") or 0)
+    return samples > 0 and clear / samples >= MIN_CLEAR_FRACTION
+
+
 def _latest_valid(intervals: list) -> tuple[str, dict] | None:
     """Pick the most recent interval that has valid NDVI stats."""
     for item in reversed(intervals):
-        outputs = item.get("outputs", {}).get("ndvi", {})
-        bands = outputs.get("bands", {})
-        stats = bands.get("B0", {}).get("stats", {})
-        # sampleCount==0 or all-nodata intervals report a non-numeric mean
-        if isinstance(stats.get("mean"), (int, float)) and stats.get("sampleCount", 1) != 0:
+        stats = _stats(item)
+        if _usable(stats):
             return item.get("interval", {}).get("from", "")[:10], stats
     return None

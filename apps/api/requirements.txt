@@ -14,7 +14,11 @@ sqlalchemy[asyncio]==2.0.36
 aiosqlite==0.20.0
 psycopg[binary]==3.2.3
 alembic==1.14.0
+# Auth is delegated to Supabase; the API only verifies its access tokens.
+# Supabase signs user tokens with ES256, so PyJWT needs `cryptography` to verify
+# them against the project's public JWKS.
 pyjwt==2.10.1
+cryptography==44.0.0
 
 # Stage 2: shared cache, PDF export. NDVI uses Sentinel Hub over plain httpx.
 # The AI advisory calls its providers (Claude/Gemini/Groq/OpenAI) over REST via

@@ -41,10 +41,6 @@ def test_recommend_respects_system_filter():
     assert any(x["crop_id"] == "paddy" for x in r["recommendations"])
 
 
-def test_google_auth_disabled_without_client_id():
-    assert client.post("/auth/google", json={"credential": "x"}).status_code == 503
-
-
 def test_geo_search_validates_query():
     assert client.get("/geo/search").status_code == 422       # q required
     assert client.get("/geo/search", params={"q": "a"}).status_code == 422  # too short
@@ -177,11 +173,6 @@ def test_protected_route_without_token_is_403():
     assert client.get("/fields").status_code == 403
 
 
-def test_otp_request_returns_dev_code():
-    body = client.post("/auth/otp/request", json={"phone": "+919000000009"}).json()
-    assert body["sent"] and body["dev_code"]
-
-
 def test_schemes_national_and_state_filter():
     national = client.get("/resources/schemes").json()
     assert national["count"] >= 8
@@ -198,9 +189,8 @@ def test_ndvi_series_graceful_without_credentials():
     assert r.status_code == 200 and r.json()["configured"] is False
 
 
-def test_admin_and_sso_disabled_by_default():
+def test_admin_disabled_by_default():
     assert client.get("/admin/stats").status_code == 503
-    assert client.post("/auth/sso", json={"token": "x"}).status_code == 503
 
 
 def test_diagnose_requires_key():

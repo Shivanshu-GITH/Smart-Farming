@@ -29,8 +29,8 @@ services:
       DATABASE_URL: postgresql+psycopg://smartfarm:smartfarm@db:5432/smartfarm
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:3000
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      OTP_DEV_MODE: ${OTP_DEV_MODE:-true}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -55,6 +55,8 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     depends_on:
       - api
     ports:

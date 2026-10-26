@@ -36,3 +36,7 @@ data/cache/
 *.db
 *.sqlite
 *.sqlite3
+
+# Research: large raw downloads + API caches are re-fetched by scripts, not committed
+research/data/raw/
+research/data/cache/

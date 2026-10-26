@@ -204,11 +204,14 @@ html, body {
 .total-row { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
 .tag { font-size: 9px; background: #17341f; color: #6fe39a; border-radius: 4px;
   padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+.tag-water { background: #13283a; color: #7cc4ff; }
+.tag-muted { background: #22282a; color: var(--muted); }
 
 /* --- map location search --- */
 .map-search {
   position: absolute; top: 12px; left: 56px; z-index: 5;
-  display: flex; gap: 6px; align-items: center; width: 340px; max-width: 40vw;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  width: 360px; max-width: 52vw;
 }
 .map-search input {
   flex: 1; background: rgba(22, 29, 27, .92); color: var(--text);
@@ -217,10 +220,34 @@ html, body {
 }
 .map-search input:focus { outline: none; border-color: var(--green); }
 .map-search-results {
-  position: absolute; top: 40px; left: 0; right: 0;
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   overflow: hidden; box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
 }
+/* Labelled map controls (finder / locate / labels). Compact, single-line, and
+   they wrap onto a second row under the search box on narrow maps. */
+.map-btn {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  background: rgba(22, 29, 27, .92); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  font-size: 12px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px);
+}
+.map-btn:hover { border-color: var(--green-2); }
+.map-btn.secondary { opacity: .62; }
+.map-btn:disabled { opacity: .5; cursor: default; }
+/* GPS accuracy / permission feedback — takes its own row under the buttons. */
+.map-note {
+  flex-basis: 100%; display: flex; align-items: center; gap: 8px;
+  background: rgba(22, 29, 27, .92); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--muted);
+  backdrop-filter: blur(4px);
+}
+.map-note-error { color: #f2b45b; }
+.map-note-close {
+  margin-left: auto; background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 0;
+}
+.map-note-close:hover { color: var(--text); }
 .map-search-item {
   padding: 9px 12px; font-size: 12px; cursor: pointer; line-height: 1.4;
   border-bottom: 1px solid var(--border);
@@ -229,7 +256,8 @@ html, body {
 .map-search-item:hover { background: #15241a; }
 .map-search-item.muted { color: var(--muted); cursor: default; }
 .finder-panel {
-  position: absolute; top: 40px; left: 0; width: 340px;
+  position: absolute; top: calc(100% + 6px); left: 0; width: 340px;
+  max-height: 70vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
 }
@@ -286,6 +314,15 @@ html, body {
   content: ""; flex: 1; height: 1px; background: var(--border);
 }
 .google-slot { display: flex; justify-content: center; min-height: 40px; }
+/* "Continue with Google" — the standard white button, legible on the dark card. */
+.google-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: #fff; color: #1f2937; border: 1px solid #dadce0; border-radius: 8px;
+  padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.google-btn:hover { background: #f7f8f8; }
+.google-btn:disabled { opacity: .6; cursor: default; }
+.google-btn svg { flex: none; }
 
 /* --- schemes / resources --- */
 .scheme { display: block; padding: 8px 0; border-bottom: 1px solid var(--border);

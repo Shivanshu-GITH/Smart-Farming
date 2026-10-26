@@ -13,6 +13,7 @@ import math
 
 from app.core.geo import SQM_PER_HECTARE
 
+from . import counts
 from .catalogue import get_crop, propagation, usable_fraction
 
 # Extra planting material over the theoretical count, for nursery losses and
@@ -68,7 +69,15 @@ def _planting_material(crop: dict, plant_count: int, seed_qty: float) -> dict:
 
 
 def build_plan(crop_id: str, area_m2: float, start: dt.date | None = None,
-               system: str | None = None) -> dict:
+               system: str | None = None, perimeter_m: float | None = None,
+               plant_count: int | None = None) -> dict:
+    """Agronomic plan for one crop.
+
+    Plant count (and so seedlings/suckers to buy), best source first: the
+    ``plant_count`` of the field's actual layout; else the geometry-aware
+    estimate from area and ``perimeter_m``; else the area formula (manual
+    entry without a drawn field). Seed and fertiliser stay per-hectare budgets.
+    """
     crop = get_crop(crop_id)
     if crop is None:
         raise ValueError(f"Unknown crop '{crop_id}'")
@@ -78,7 +87,14 @@ def build_plan(crop_id: str, area_m2: float, start: dt.date | None = None,
     planting_ha = gross_ha * fraction
 
     pph = plants_per_hectare(crop)
-    plant_count = int(pph * planting_ha)
+    if plant_count is not None:
+        count_method = "layout"
+    elif perimeter_m:
+        plant_count = counts.estimate_plants(crop, area_m2, perimeter_m, system)
+        count_method = "geometric-estimate"
+    else:
+        plant_count = int(pph * planting_ha)
+        count_method = "area-estimate"
 
     seed_rate = crop.get("seed_rate_kg_per_ha", 0) or 0
     seed_qty = round(seed_rate * planting_ha, 2)
@@ -96,6 +112,7 @@ def build_plan(crop_id: str, area_m2: float, start: dt.date | None = None,
         "plants": {
             "per_hectare": pph,
             "total_estimate": plant_count,
+            "count_method": count_method,
             "note": crop.get("plants_note"),
         },
         "planting_material": _planting_material(crop, plant_count, seed_qty),

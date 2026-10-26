@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -8,6 +11,21 @@ from app.core.ratelimit import limiter
 from . import service
 
 router = APIRouter(prefix="/advisory", tags=["advisory"])
+log = logging.getLogger(__name__)
+
+
+def _provider_error(exc: Exception) -> HTTPException:
+    """A safe error for the browser. Provider exceptions carry request URLs and
+    response bodies, so they are logged here and never echoed to the client."""
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        return HTTPException(status_code=503, detail=(
+            "The AI advisor is busy (the AI provider's rate limit). "
+            "Please try again in a minute."))
+    if isinstance(exc, RuntimeError):   # our own messages, e.g. a Claude refusal
+        return HTTPException(status_code=502, detail=str(exc))
+    log.warning("advisory provider error: %s: %s", type(exc).__name__, exc)
+    return HTTPException(status_code=502, detail=(
+        "The AI advisor could not answer right now. Please try again shortly."))
 
 
 class Message(BaseModel):
@@ -18,6 +36,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[Message] = Field(min_length=1)
     context: dict | None = None
+    language: str | None = Field(default=None, max_length=8)  # UI locale: en / hi / te
 
 
 class DiagnoseRequest(BaseModel):
@@ -48,10 +67,10 @@ async def chat(req: ChatRequest) -> dict:
         )
     try:
         reply = await service.chat(
-            [m.model_dump() for m in req.messages], req.context
+            [m.model_dump() for m in req.messages], req.context, req.language
         )
     except Exception as exc:  # noqa: BLE001 - surface provider errors cleanly
-        raise HTTPException(status_code=502, detail=f"Advisory error: {exc}") from exc
+        raise _provider_error(exc) from exc
     return {"reply": reply}
 
 
@@ -73,5 +92,5 @@ async def diagnose(req: DiagnoseRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Advisory error: {exc}") from exc
+        raise _provider_error(exc) from exc
     return {"reply": reply}

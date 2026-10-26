@@ -16,7 +16,8 @@ def _layer_order() -> list[str]:
     return [name for name, _ in sorted(layers().items(), key=lambda kv: kv[1]["order"])]
 
 
-def _candidates(layer: str, *, ph, texture, rainfall, temp_max, season) -> list[dict]:
+def _candidates(layer: str, *, ph, texture, rainfall, temp_max, season,
+                tmean=None) -> list[dict]:
     out = []
     for c in all_crops():
         if c["layer"] != layer:
@@ -26,7 +27,7 @@ def _candidates(layer: str, *, ph, texture, rainfall, temp_max, season) -> list[
         if season and season not in c["seasons"]:
             continue
         s = score_crop(c, ph=ph, texture=texture, rainfall=rainfall,
-                       temp_max=temp_max, season=season)
+                       temp_max=temp_max, season=season, tmean=tmean)
         if s["score"] < 0.4:  # skip unsuitable crops entirely
             continue
         out.append({**s, "crop": c})
@@ -57,14 +58,15 @@ def _synergy_bonus(cand: dict, chosen: list[dict]) -> float:
 
 def design_stacks(*, ph=None, texture=None, rainfall=None, temp_max=None,
                   season=None, max_stacks: int = 3, beam_width: int = 6,
-                  top_k_per_layer: int = 4) -> dict:
+                  top_k_per_layer: int = 4, tmean: dict | None = None) -> dict:
     """Beam search over vertical layers. Each beam entry is a partial stack:
     {"picks": [...], "score": float}. We extend by one layer at a time."""
     beams: list[dict] = [{"picks": [], "score": 0.0}]
 
     for layer in _layer_order():
         cands = _candidates(layer, ph=ph, texture=texture, rainfall=rainfall,
-                            temp_max=temp_max, season=season)[:top_k_per_layer]
+                            temp_max=temp_max, season=season,
+                            tmean=tmean)[:top_k_per_layer]
         next_beams: list[dict] = []
         for beam in beams:
             # Option 1: skip this layer (not every field needs all 5 filled).
